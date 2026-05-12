@@ -8,7 +8,7 @@
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/f17mkx?style=flat-square&logo=github&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/f17mkx)
 [![Buy Me AI Tokens](https://img.shields.io/badge/Buy%20Me-AI%20Tokens-FFDD00?style=flat-square&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/f17mkx)
 
-![Parallel-axis demo: 4-axis tile with brightness, temperature, hue and saturation rendered side by side. Color-mode switching, group toggle with on/off persistence (scene-snapshot restore).](assets/demos/01-parallel-axis-and-group-toggle.gif)
+![Collapsed group tile expanded inline on long-press, color mode changed through a popup on a member light, slider mode cycled via double-tap.](assets/demos/03-collapsed-expand-color-and-slider-cycle.gif)
 
 ## Why this exists
 
@@ -47,9 +47,9 @@ Set `default_view_mode: color-wheel` or `default_view_mode: saved-colors` to mak
 
 ![Apartment topology view, expanded: 14 lights across 4 groups (Kitchen, Bathroom, Hall, Main), each light a vertical pill slider with a group icon beneath, mindmap arms connecting the groups to the apartment root node at the bottom.](assets/screenshots/00-hero-expanded.png)
 
-### Collapsed group to expanded with color-mode popup
+### Parallel-axis sliders with color-mode switching and group-toggle persistence
 
-![Collapsed group tile expanded inline on long-press, color mode changed through a popup on a member light, slider mode cycled via double-tap.](assets/demos/03-collapsed-expand-color-and-slider-cycle.gif)
+![Parallel-axis demo: 4-axis tile with brightness, temperature, hue and saturation rendered side by side. Color-mode switching, group toggle with on/off persistence (scene-snapshot restore).](assets/demos/01-parallel-axis-and-group-toggle.gif)
 
 ## Install (via HACS)
 
