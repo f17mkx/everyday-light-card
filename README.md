@@ -20,8 +20,9 @@ Home Assistant's stock light card and Mushroom give you one slider per light. Wo
 - **All-axis tile**: `default_view_mode: parallel` renders brightness + temperature + hue + saturation as 4 sliders side-by-side. Walk in, eyeball the room, drag any axis. No mode-switching.
 - **Press-drag-select mode picker**: long-press the icon, drag onto one of the 4-diamond picker options, release. Single gesture from idle to specific control. Color wheel blooms from the option you released on.
 - **Double-tap to cycle**: double-tap the icon to cycle through the slider modes.
-- **Color wheel**: stepped (21 hues × 6 saturation rings default) or smooth gradient. Configurable down to 6×3 if you want a chunky look. Click any sector, light snaps to that hue+sat.
+- **Color wheel**: stepped (8 saturation rings × 24 hues default) or smooth gradient. Configurable down to 5 rings if you want a chunky look (inner ring stays selectable instead of being a white-only blob). Click any sector, light snaps to that hue+sat.
 - **Saved-colors palette**: 8-cell grid you build by long-press → save current. Persists in HA's native user-data store (zero-config) or your own `input_text` helper.
+- **Dedicated picker tiles**: `default_view_mode: color-wheel` or `default_view_mode: saved-colors` turns the entire card into a standalone color picker — no slider, no icon, just the wheel or the palette. See [`docs/howto/05-gradient-mood.md`](docs/howto/05-gradient-mood.md).
 - **Compact-then-expand**: single tile with mindmap-arm hint. Long-press to expand inline (sibling cards reflow) or as a popup.
 - **Runtime gesture rebinding**: map any tap / long-press / press-drag to any mode via config (`gestures.member_icon`, `gestures.group_icon`).
 - **Theme-friendly**: consumes HA token vars (`--paper-item-icon-active-color`, `--state-light-active-color`, `--card-background-color`). Custom theme overrides via `--everyday-*` CSS variables.
@@ -32,9 +33,15 @@ Home Assistant's stock light card and Mushroom give you one slider per light. Wo
 
 ### Color wheel variants
 
-![Four color-wheel variants on white background: 21 hues × 6 rings (default), 12 × 4 (simpler), 6 × 3 (chunky), and smooth gradient (continuous conic).](assets/screenshots/wheel-variants-grid.png)
+![Four color-wheel variants on white background: 8 rings × 24 hues (default), 12 rings × 24 hues (more saturation steps), 5 rings × 24 hues (chunky, no white center), and smooth gradient (continuous conic).](assets/screenshots/wheel-variants-grid.png)
 
-Configure via `color_wheel: { type: stepped, hue_segments: N, saturation_rings: M }` or `color_wheel: { type: smooth }`.
+Configure via `color_wheel: { type: stepped, hue_segments: N, saturation_rings: M }` or `color_wheel: { type: smooth }`. When `saturation_rings: 5` or fewer, the white-center disc is automatically suppressed so the innermost ring remains a selectable low-saturation color.
+
+### Dedicated color picker tiles
+
+![Three side-by-side display modes: standalone color wheel tile, standalone saved-colors tile, and the default slider+icon mode for comparison.](assets/screenshots/display-modes-overview.png)
+
+Set `default_view_mode: color-wheel` or `default_view_mode: saved-colors` to make the entire card a picker. No slider, no icon. Tap a color, light goes to that color. Recipe: [`docs/howto/05-gradient-mood.md`](docs/howto/05-gradient-mood.md).
 
 ### Apartment topology, expanded
 
@@ -42,7 +49,7 @@ Configure via `color_wheel: { type: stepped, hue_segments: N, saturation_rings: 
 
 ### Collapsed group to expanded with color-mode popup
 
-![Collapsed group tile gets expanded inline on long-press, color mode is changed through a popup on a member light.](assets/demos/03-collapsed-to-expanded-color-popup.gif)
+![Collapsed group tile expanded inline on long-press, color mode changed through a popup on a member light, slider mode cycled via double-tap.](assets/demos/03-collapsed-expand-color-and-slider-cycle.gif)
 
 ## Install (via HACS)
 

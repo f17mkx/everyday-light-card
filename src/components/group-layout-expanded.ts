@@ -359,6 +359,16 @@ export class EverydayGroupLayoutExpanded extends LitElement {
   private _lastStates: Record<string, string> = {};
 
   /**
+   * Per-member previous `color_mode` attribute. Used by the
+   * temperature → brightness auto-revert (Stefan-2026-05-12 R331 / PA-0012):
+   * when the light leaves `color_temp` mode (because the user picked a colour
+   * via the wheel/saved popup), a slider that was showing the temperature
+   * axis is no longer meaningful and gets reset to brightness on the same
+   * hass push that delivers the new color_mode.
+   */
+  private _lastColorModes: Record<string, string> = {};
+
+  /**
    * Per-member last-known `color_temp_kelvin`. Snapshotted on every hass push
    * when the light reports a kelvin value (regardless of whether it's
    * currently in temp mode). When the user activates `'temperature'` slider
@@ -770,6 +780,25 @@ export class EverydayGroupLayoutExpanded extends LitElement {
           }
         }
         this._lastStates[id] = next;
+
+        // Stefan-2026-05-12 R331 (PA-0012): temperature → brightness auto-revert
+        // when the light leaves `color_temp` mode. If the slider is showing the
+        // temperature axis and the user just picked a colour (wheel / saved-
+        // colours popup), the light's color_mode flips from `color_temp` to a
+        // colour mode (`hs` / `rgb` / `rgbw` / `rgbww` / `xy`). The temperature
+        // slider is no longer meaningful in that state, so snap it back to
+        // brightness on the same hass push that delivers the flipped color_mode.
+        // Symmetric reverse (colour → color_temp) is intentionally NOT applied:
+        // the user controls when they want the temperature slider back via the
+        // mode-picker, so we don't yank them out of brightness unprompted.
+        const nextColorMode = (this.hass?.states[id]?.attributes?.color_mode as string | undefined) ?? '';
+        const prevColorMode = this._lastColorModes[id] ?? '';
+        const leavingTemp = prevColorMode === 'color_temp' && nextColorMode !== '' && nextColorMode !== 'color_temp';
+        if (leavingTemp && this._memberModes[id] === 'temperature') {
+          if (!modesPatch) modesPatch = { ...this._memberModes };
+          modesPatch[id] = 'brightness';
+        }
+        if (nextColorMode) this._lastColorModes[id] = nextColorMode;
       }
       if (modesPatch) this._memberModes = modesPatch;
     }
@@ -1842,6 +1871,16 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     // same slider length as its parent". fullLengthSliders=true keeps 260.
     const sliderHeightPx = this.fullLengthSliders ? 260 : 220;
 
+    // Stefan-2026-05-12 R332 (PA-0012): `parallel_sliders.layout: compact`
+    // means "brightness slider only" — for the popup variant, collapse the
+    // modes-list to `['brightness']` regardless of the `modes:` config.
+    // The compact-layout flag is the user's "give me ONE slider" signal,
+    // and the popup honors it by rendering a single column. Expanded keeps
+    // the full N-axis stack.
+    const popupModes: SliderMode[] = this.parallelSlidersConfig?.layout === 'compact'
+      ? ['brightness']
+      : target.modes;
+
     // Width grows with the number of parallel sliders. Each slider is
     // ~60 px wide + 22 px gap; pad outer padding 20 px each side.
     // Stefan-2026-05-11 R287 (PA-14): drop the previous `Math.max(r.width,
@@ -1857,7 +1896,7 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     // Side-effect: R286 (close-on-click-outside-popup) auto-fixes since
     // the popup is now narrower than the card — clicks inside the card
     // but outside the popup are now legitimately "outside".
-    const popupWidth = Math.max(160, target.modes.length * 82 + 20);
+    const popupWidth = Math.max(160, popupModes.length * 82 + 20);
     // Stefan-2026-05-09 P46 R27+R28a + P47 R31a: scroll-aware + bottom-
     // anchor at the SLIDER's bottom-edge (NOT the labels — labels go above).
     const popupStyle = [
@@ -1882,7 +1921,7 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       >
         <div class="popup-card anchored-card parallel-card">
           <div class="popup-body parallel-body">
-            ${target.modes.map(
+            ${popupModes.map(
               (m) => html`
                 <div class="parallel-col">
                   ${showLabels
@@ -2647,6 +2686,33 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       // so the phantom click from the long-press that just expanded the
       // view doesn't collapse it.
       if (this._compactExpanded && !withinSuppression) {
+        // Stefan-2026-05-12 R333 (PA-0012): when a popup is open ANYWHERE
+        // on the page (could be a wheel/saved/parallel-popup hosted by a
+        // SIBLING card instance, since popups mount at document.body via
+        // portal), AND the user is tapping INSIDE the card chrome, treat
+        // this as a popup-dismissal — close the popup (other instance's
+        // listener will do that) and KEEP our expansion. Only collapse
+        // when the click is truly outside any card. Stefan-Quote: "only
+        // the pop up should close, the expanded mindmap should only close
+        // when you press outside of the card".
+        //
+        // The portal sets `pointer-events: none` on the wrapper so clicks
+        // outside popup elements pass through to whatever's behind. If
+        // that's a card chrome (the back-card containing our nested
+        // group-layouts), the click hits an `ha-card` in its composed
+        // path. If it's truly empty dashboard background, no `ha-card`
+        // appears in the path → fall through to the collapse check.
+        const anyPopupOpen = !!document.querySelector(
+          '.inplace-popup, .parallel-popup, .topology-popup',
+        );
+        if (anyPopupOpen) {
+          const inHaCard = path.some((n) => {
+            const el = n as Element | undefined;
+            return typeof el?.tagName === 'string' && el.tagName === 'HA-CARD';
+          });
+          if (inHaCard) return;
+        }
+
         const onInteractive = path.some((n) => {
           const el = n as Element | undefined;
           if (!el) return false;

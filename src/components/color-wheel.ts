@@ -73,13 +73,25 @@ export class EverydayColorWheel extends LitElement {
    *             maps to polar coords → HSV → RGB.
    */
   @property({ type: String, attribute: 'wheel-type' }) wheelType: 'stepped' | 'smooth' = 'stepped';
-  // Stefan-2026-05-10 P15.6-r47 (R227): defaults bumped from 12×4 to
-  // 21×6. Smoother gradient + more saturation steps. Stefan-Quote:
-  // "this should be color wheel default ... hue_segments: 21,
-  // saturation_rings: 6". Hosts also default to 21×6 in their `??`
-  // fallbacks so explicit-undefined props land on the same numbers.
-  @property({ type: Number, attribute: 'hues' }) hues = 21;
-  @property({ type: Number, attribute: 'rings' }) rings = 6;
+  // Stefan-2026-05-12 P15.6-r64 (PA-0014): defaults bumped from 21×6 to
+  // 8×24 — more hue resolution at the same visual density, fewer
+  // saturation rings so each ring carries more weight. Stefan-Quote
+  // PA-0014: "default, with 8 steps and 24 hues, 12 und 5 steps". The
+  // 21×6 default from r47 was too crowded on small screens; the new
+  // 8×24 reads cleaner while exposing more colors. Hosts default to
+  // 8×24 in their `??` fallbacks so explicit-undefined props land on
+  // the same numbers.
+  @property({ type: Number, attribute: 'hues' }) hues = 24;
+  @property({ type: Number, attribute: 'rings' }) rings = 8;
+  // Stefan-2026-05-12 P15.6-r64 (PA-0014): when `rings ≤ 5`, the inner
+  // circle must NOT be replaced by a white disc — instead, the natural
+  // low-saturation segment at ring 0 remains selectable. Stefan-Quote:
+  // "bei 5 oder weniger Steps soll der innere Kreis nicht weiß sein,
+  // sondern immer auch als option zum auswählen bestehen". Applies to
+  // the stepped variant; smooth keeps its radial white-bias gradient.
+  // `whiteCenter` here is the *requested* state; the effective state
+  // is computed in render() so the rings-≤5 rule wins regardless of
+  // attribute value.
   @property({ type: Boolean, attribute: 'white-center' }) whiteCenter = true;
 
   private _onSegmentClick = (rgb: [number, number, number]) => (ev: Event): void => {
@@ -156,7 +168,12 @@ export class EverydayColorWheel extends LitElement {
 
     const HUES = Math.max(2, this.hues);
     const RINGS = Math.max(1, this.rings);
-    const startRing = this.whiteCenter ? 1 : 0;
+    // Stefan-2026-05-12 P15.6-r64 (PA-0014): rings ≤ 5 → force the
+    // innermost segment to render as a selectable arc instead of a
+    // white disc, so users on the chunky variants still get full
+    // saturation coverage at the low-saturation end.
+    const effectiveWhiteCenter = this.whiteCenter && RINGS > 5;
+    const startRing = effectiveWhiteCenter ? 1 : 0;
     const segments: SVGTemplateResult[] = [];
     for (let ring = startRing; ring < RINGS; ring++) {
       const r1 = (RMAX / RINGS) * ring;
@@ -177,7 +194,7 @@ export class EverydayColorWheel extends LitElement {
         `);
       }
     }
-    const whiteCircle = this.whiteCenter
+    const whiteCircle = effectiveWhiteCenter
       ? svg`
         <circle
           cx="0"
@@ -201,7 +218,13 @@ export class EverydayColorWheel extends LitElement {
     :host {
       display: block;
       width: 100%;
-      max-width: 320px;
+      /* Stefan-2026-05-12 P15.6-r64 (PA-0014): dropped max-width 320px.
+         When a host set explicit width 360 + height 360, the
+         320px clamp on width left height untouched, producing a
+         320x360 rectangle (Stefan saw the smooth wheel "schmaler
+         als hoch" on wheel-variants.html). aspect-ratio alone now
+         drives height from the rendered width; the popup host
+         already constrains absolute size via its own wrapper. */
       aspect-ratio: 1 / 1;
     }
     svg {

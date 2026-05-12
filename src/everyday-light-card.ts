@@ -128,6 +128,12 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
   // saves landing at exact kelvin.
   @state() private _savedColorsState: ColorEntry[] | null = null;
 
+  // Stefan-2026-05-12 P15.6-r64 (PA-0014 R3): edit-mode for the standalone
+  // 'saved-colors' display-mode tile. Toggled by long-press inside the
+  // picker (enter-edit), reset by tapping ✓ (done-editing). Independent of
+  // any popup edit state used by group-layout-expanded.
+  @state() private _displayModeSavedEditing = false;
+
   private _picker = new PickerController(this, {
     // Stefan-2026-05-10 P15.6-r46 (R221 + R222): variant `parallel-inline`
     // replaces `group-expanded` here. Picker now shows only saved/wheel
@@ -418,6 +424,33 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       );
     }
   }
+
+  // ============================================================
+  // Display-mode handlers — color-wheel / saved-colors standalone
+  // (Stefan-2026-05-12 P15.6-r64 / PA-0014 R3). The card body becomes a
+  // dedicated picker tile when `default_view_mode` is set to one of
+  // 'color-wheel' / 'saved-colors'. Pattern mirrors effects-picker below:
+  // no slider, no icon, no mindmap. The picker emits `color-pick` with
+  // `{ r, g, b }` and the host fires `light.turn_on` with rgb_color.
+  // ============================================================
+  private _onDisplayModeColorPick = (ev: CustomEvent): void => {
+    ev.stopPropagation();
+    if (!this.hass || !this.config) return;
+    const r = ev.detail?.r;
+    const g = ev.detail?.g;
+    const b = ev.detail?.b;
+    if (typeof r !== 'number' || typeof g !== 'number' || typeof b !== 'number') return;
+    void this.hass.callService('light', 'turn_on', {
+      entity_id: this.config.entity,
+      rgb_color: [r, g, b],
+    });
+  };
+
+  private _onDisplayModeSavedPick = (ev: CustomEvent): void => {
+    // saved-colors-picker dispatches `{ r, g, b }` on tap. Reuse the same
+    // service-call path as the wheel above so behaviour is identical.
+    this._onDisplayModeColorPick(ev);
+  };
 
   // ============================================================
   // Effects-picker handlers (P38.1 — Stefan-2026-05-09)
@@ -771,6 +804,68 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       </div></ha-card>`;
     }
 
+    // Stefan-2026-05-12 P15.6-r64 (PA-0014 R3): color-wheel render-mode.
+    // The card becomes a standalone color-wheel tile — no slider, no icon,
+    // no mindmap. Wheel geometry from `color_wheel.*` config (defaults
+    // 8 rings × 24 hues stepped). Tap → light.turn_on with rgb_color.
+    if (this.config.default_view_mode === 'color-wheel' && domain === 'light') {
+      const wheelType = this.config.color_wheel?.type === 'smooth' ? 'smooth' : 'stepped';
+      const hues = this.config.color_wheel?.hue_segments ?? 24;
+      const rings = this.config.color_wheel?.saturation_rings ?? 8;
+      const labelTitle = this.config.name
+        ?? (stateObj.attributes.friendly_name as string | undefined)
+        ?? this.config.entity;
+      return html`
+        <ha-card>
+          <div class="display-mode-card">
+            <div class="display-mode-title">${labelTitle}</div>
+            <div class="display-mode-wheel-wrap">
+              <everyday-color-wheel
+                wheel-type=${wheelType}
+                hues=${hues}
+                rings=${rings}
+                @color-pick=${this._onDisplayModeColorPick}
+              ></everyday-color-wheel>
+            </div>
+          </div>
+        </ha-card>
+      `;
+    }
+
+    // Stefan-2026-05-12 P15.6-r64 (PA-0014 R3): saved-colors render-mode.
+    // The card becomes a standalone saved-colors-picker tile — no slider,
+    // no icon, no mindmap. Palette + persistence reuse the existing
+    // _savedColorsState path (lazy-seeded on first render, persisted via
+    // helper:input_text or HA user_data when no source is configured).
+    // Edit-mode (long-press → wiggle + −/+ ✓) is per-card local state.
+    if (this.config.default_view_mode === 'saved-colors' && domain === 'light') {
+      this._ensureSavedColorsState();
+      const labelTitle = this.config.name
+        ?? (stateObj.attributes.friendly_name as string | undefined)
+        ?? this.config.entity;
+      return html`
+        <ha-card>
+          <div class="display-mode-card">
+            <div class="display-mode-title">
+              ${labelTitle}${this._displayModeSavedEditing ? ' · edit' : ''}
+            </div>
+            <everyday-saved-colors-picker
+              .colors=${this._savedColorsState ?? []}
+              .editMode=${this._displayModeSavedEditing}
+              @color-pick=${this._onDisplayModeSavedPick}
+              @add-current=${() => this._onSavedAddCurrent()}
+              @remove-color=${(ev: CustomEvent) => {
+                const idx = ev.detail?.index as number | undefined;
+                if (typeof idx === 'number') this._onSavedRemove(idx);
+              }}
+              @enter-edit=${() => { this._displayModeSavedEditing = true; }}
+              @done-editing=${() => { this._displayModeSavedEditing = false; }}
+            ></everyday-saved-colors-picker>
+          </div>
+        </ha-card>
+      `;
+    }
+
     // Stefan-2026-05-09 P38.1: effects-picker render-mode. The card becomes
     // a standalone effects-list-picker tile — no slider, no icon. Effects
     // are sourced from `light.attributes.effect_list`. State (active vs
@@ -827,10 +922,18 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       // No early-return; `mode` resolution lower picks up the override.
     } else if (this.config.default_view_mode === 'parallel' && domain === 'light') {
       const cfg = this.config;
-      const modes = (cfg.parallel_sliders?.modes
-        ?? ['brightness', 'temperature', 'hue', 'saturation']) as Array<
-          'brightness' | 'temperature' | 'hue' | 'saturation'
-        >;
+      // Stefan-2026-05-12 R332 (PA-0012): `parallel_sliders.layout: compact`
+      // means "brightness slider only". The configured `modes:` array is
+      // intentionally ignored when layout is compact — Stefan-Quote: "parallel_sliders:
+      // layout: compact should mean that in compact view only the brightness
+      // slider is shown". Expanded keeps the full multi-axis stack.
+      const parallelLayoutIsCompact = cfg.parallel_sliders?.layout === 'compact';
+      const modes = parallelLayoutIsCompact
+        ? (['brightness'] as Array<'brightness' | 'temperature' | 'hue' | 'saturation'>)
+        : ((cfg.parallel_sliders?.modes
+          ?? ['brightness', 'temperature', 'hue', 'saturation']) as Array<
+            'brightness' | 'temperature' | 'hue' | 'saturation'
+          >);
       // Stefan-2026-05-12 P15.6-r63i (R307 / PA-0039): default OFF.
       // Pre-r63i: `!== false` → labels ON by default. Stefan-Quote:
       // "please disable the lables for the paralell sliders (pop up und
@@ -878,7 +981,10 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       // sliders + icon + caption in a minimal vertical stack. Use when
       // parallel-inline is embedded inside a larger group's topology and
       // the surrounding mindmap-arms already provide the visual structure.
-      const parallelCompact = cfg.parallel_sliders?.layout === 'compact';
+      // Stefan-2026-05-12 R332 (PA-0012): compact ALSO collapses the modes
+      // array to brightness-only (applied above where `modes` is computed);
+      // this `parallelCompact` flag drives the structural-layout swap.
+      const parallelCompact = parallelLayoutIsCompact;
       const parallelInner = parallelCompact
         ? html`
             <div class="parallel-compact-layout">
@@ -1739,6 +1845,33 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       color: var(--primary-text-color);
       font-size: 14px;
       font-weight: 500;
+    }
+    /* Stefan-2026-05-12 P15.6-r64 (PA-0014 R3): standalone color-wheel /
+       saved-colors display-mode card layout. Mirrors .effects-card so the
+       three "no-slider" picker tiles share the same chrome. */
+    .display-mode-card {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 14px 14px 16px;
+      align-items: center;
+    }
+    .display-mode-title {
+      font-family: var(--paper-font-body1_-_font-family);
+      color: var(--primary-text-color);
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .display-mode-wheel-wrap {
+      width: 100%;
+      max-width: 320px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 0;
+    }
+    .display-mode-wheel-wrap everyday-color-wheel {
+      width: 100%;
     }
 
     .placeholder {

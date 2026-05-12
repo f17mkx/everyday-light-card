@@ -280,12 +280,31 @@ export interface EverydayLightCardConfig extends LovelaceCardConfig {
    *                 effects = `light.attributes.effect_list`. Active /
    *                 deleted ordering kept in @state for MVP (lost on reload);
    *                 input_text-helper persistence deferred to P38.2.
+   *   'color-wheel' — Stefan-2026-05-12 P15.6-r64 (PA-0014 R3): render JUST
+   *                 the color wheel for the entity. No slider, no icon, no
+   *                 mindmap. Wheel geometry from `color_wheel.hue_segments` /
+   *                 `color_wheel.saturation_rings` / `color_wheel.type`;
+   *                 defaults 8 rings × 24 hues stepped. Tap a segment →
+   *                 `light.turn_on` with `rgb_color`. Useful as a dedicated
+   *                 wall-tile picker.
+   *   'saved-colors' — Stefan-2026-05-12 P15.6-r64 (PA-0014 R3): render JUST
+   *                 the saved-colors palette tile. No slider, no icon, no
+   *                 wheel. Tap a swatch → `light.turn_on` with `rgb_color`.
+   *                 Long-press a swatch (when `saved_colors.editable !==
+   *                 false`) enters edit-mode; long-press a non-saved cell
+   *                 saves the current entity color. Persistence reuses the
+   *                 standard `saved_colors.source` / HA user_data fallback.
    * Stefan-decision-2026-05-09: "Es soll auch eine 'per default paralell'
    * sliders geben (das ist dann wieder ohne popup gelöst)" — so this is the
    * non-popup render path; the parallel-popup is only for picker-triggered
    * one-shot use.
    */
-  default_view_mode?: 'collapsed' | 'parallel' | 'effects-picker';
+  default_view_mode?:
+    | 'collapsed'
+    | 'parallel'
+    | 'effects-picker'
+    | 'color-wheel'
+    | 'saved-colors';
 
   // Group features (Phase 5 expansion).
   group?: GroupConfig;
