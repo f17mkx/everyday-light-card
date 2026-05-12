@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/github/license/f17mkx/everyday-light-card?style=flat-square)](LICENSE)
 [![HA min](https://img.shields.io/badge/Home%20Assistant-2024.10.0+-41BDF5?style=flat-square&logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/f17mkx?style=flat-square&logo=github&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/f17mkx)
-[![Buy Me AI Tokens](https://img.shields.io/badge/Buy%20Me-AI%20Tokens-FFDD00?style=flat-square&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/f17mkx)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me-a%20Coffee-FFDD00?style=flat-square&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/f17mkx)
 
 ![Collapsed group tile expanded inline on long-press, color mode changed through a popup on a member light, slider mode cycled via double-tap.](assets/demos/03-collapsed-expand-color-and-slider-cycle.gif)
 
@@ -133,7 +133,7 @@ More recipes in [`docs/howto/`](docs/howto/).
 
 This card is free, MIT, and built by one person on the side. If it saved you an evening of CSS-wrestling, the easiest way to say thanks:
 
-[![Buy Me AI Tokens](https://img.shields.io/badge/Buy%20Me-AI%20Tokens-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/f17mkx) &nbsp; [![GitHub Sponsors](https://img.shields.io/github/sponsors/f17mkx?style=for-the-badge&logo=github&color=ea4aaa&label=Sponsor%20on%20GitHub)](https://github.com/sponsors/f17mkx)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me-a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/f17mkx) &nbsp; [![GitHub Sponsors](https://img.shields.io/github/sponsors/f17mkx?style=for-the-badge&logo=github&color=ea4aaa&label=Sponsor%20on%20GitHub)](https://github.com/sponsors/f17mkx)
 
 Every tip funds the next card in the family: `everyday-shutter-card`, `everyday-climate-card`, `everyday-media-card`, `everyday-themes`.
 
