@@ -1,6 +1,6 @@
 # Everyday Light Card
 
-> A group-aware Lovelace card for Home Assistant — turn 14 lights into one card with a mindmap topology, in-place color wheel, and saved-colors that persist across reloads.
+> A group-aware Lovelace card for Home Assistant. Turn 14 lights into one card with a mindmap topology, in-place color wheel, and saved-colors that persist across reloads.
 
 [![Version](https://img.shields.io/github/v/release/f17mkx/everyday-light-card?style=flat-square&color=blue)](https://github.com/f17mkx/everyday-light-card/releases)
 [![License: MIT](https://img.shields.io/github/license/f17mkx/everyday-light-card?style=flat-square)](LICENSE)
@@ -8,35 +8,34 @@
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/f17mkx?style=flat-square&logo=github&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/f17mkx)
 [![Buy Me AI Tokens](https://img.shields.io/badge/Buy%20Me-AI%20Tokens-FFDD00?style=flat-square&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/f17mkx)
 
-![Apartment topology view — 14 lights, 4 groups, mindmap arms connecting members to their group icons, group icons connecting up to the apartment root](assets/screenshots/01-hero-apartment-tree-clean.png)
+![Apartment topology view: 14 lights, 4 groups, mindmap arms connecting members to their group icons, group icons connecting up to the apartment root](assets/screenshots/01-hero-apartment-tree-clean.png)
 
 ## Why this exists
 
 Home Assistant's stock light card gives you one light at a time. Mushroom gives you a tile, not a topology. Bubble Card is gorgeous but doesn't model groups. You end up with rows of identical tiles that don't tell you anything about how your apartment is structured.
 
-This card models the actual relationship between lights — six bedroom lights live under a "Main" group, that group lives under your apartment root, and the visual layout shows it. Tap the apartment to toggle everything. Tap a group to toggle just that group with full state-restore (the snapshot pattern, not just on/off). Long-press any light's icon to swap into color mode, color-temp mode, hue, saturation, or a saved-colors palette — without leaving the card.
+This card models the actual relationship between lights. Six bedroom lights live under a "Main" group, that group lives under your apartment root, and the visual layout shows it. Tap the apartment to toggle everything. Tap a group to toggle just that group with full state-restore (the snapshot pattern, not just on/off). Long-press any light's icon to swap into color mode, color-temp mode, hue, saturation, or a saved-colors palette without leaving the card.
 
 ## Features
 
-- **Mindmap topology** — group icons connect to members via state-reactive SVG bézier curves. Color follows entity state, opacity follows brightness.
-- **In-place mode picker** — long-press a member's icon, drag to one of 4 modes (brightness · temp · color wheel · saved palette). No popup leave, no settings dialog.
-- **Group toggle with state-restore** — tap the group icon, all members go off but their last state is snapshotted as a scene. Tap again, exact restore.
-- **Color wheel** — stepped (12 hues × 4 saturation rings, default) or smooth gradient. Click any sector, light snaps to that hue+sat.
-- **Saved-colors palette** — 8-cell grid you build by long-press → save current. Persists in HA's native user-data store (zero-config) or your own `input_text` helper.
-- **Effects-list picker** — for gradient strips and effect-supporting lights, scrollable list with reorder + delete + restore.
-- **Parallel-axis view** — turn one light into 4 stacked sliders (brightness · temp · hue · sat) for a single "make-it-cozy" tile.
-- **Compact-or-expanded** — `group.layout: compact` shows one consolidated slider + group tile. Long-press the tile, the group expands inline.
-- **Speaker row** — media_player domain renders a horizontal mixer-fader with ± buttons and play/pause (Bubble-Card-inspired layout).
-- **Runtime gesture rebinding** — map any tap / long-press / press-drag to any mode via config (`gestures.member_icon`, `gestures.group_icon`).
-- **Theme-friendly** — consumes HA token vars (`--paper-item-icon-active-color`, `--state-light-active-color`, `--card-background-color`). Custom theme overrides via `--everyday-*` CSS variables.
+- **Mindmap topology**: group icons connect to members via state-reactive SVG bézier curves. Color follows entity state, opacity follows brightness.
+- **In-place mode picker**: long-press a member's icon, drag to one of 4 modes (brightness, temp, color wheel, saved palette). No popup leave, no settings dialog.
+- **Group toggle with state-restore**: tap the group icon, all members go off but their last state is snapshotted as a scene. Tap again, exact restore.
+- **Color wheel**: stepped (21 hues × 6 saturation rings, default) or smooth gradient. Click any sector, light snaps to that hue+sat.
+- **Saved-colors palette**: 8-cell grid you build by long-press → save current. Persists in HA's native user-data store (zero-config) or your own `input_text` helper.
+- **Effects-list picker**: for gradient strips and effect-supporting lights, scrollable list with reorder + delete + restore.
+- **Parallel-axis view**: turn one light into 4 stacked sliders (brightness, temp, hue, sat) for a single "make-it-cozy" tile.
+- **Compact-or-expanded**: `group.layout: compact` shows one consolidated slider + group tile. Long-press the tile, the group expands inline.
+- **Runtime gesture rebinding**: map any tap / long-press / press-drag to any mode via config (`gestures.member_icon`, `gestures.group_icon`).
+- **Theme-friendly**: consumes HA token vars (`--paper-item-icon-active-color`, `--state-light-active-color`, `--card-background-color`). Custom theme overrides via `--everyday-*` CSS variables.
 
 ### A group, expanded
 
-![Main bedroom group expanded — Desk, TV, Mirror (in color mode), Bed, Window, Sofa — all six members with their own pill sliders, mindmap arms converging on the Main group icon below](assets/screenshots/02-main-bedroom-group.png)
+![Main bedroom group expanded: Desk, TV, Mirror in color mode, Bed, Window, Sofa, all six members with their own pill sliders, mindmap arms converging on the Main group icon below](assets/screenshots/02-main-bedroom-group.png)
 
 ### One light, parallel-axis
 
-![A single Spot 1 light shown as two parallel sliders side by side — brightness at 27 on the left, color temperature at 218 (warm orange gradient) on the right, with the light's tile in the center](assets/screenshots/03-single-light-parallel.png)
+![A single Spot 1 light shown as two parallel sliders side by side, brightness at 27 on the left, color temperature at 218 with a warm orange gradient on the right, light's tile in the center](assets/screenshots/03-single-light-parallel.png)
 
 ### Compact and expanded, side by side
 
@@ -88,17 +87,6 @@ parallel_sliders:
   modes: [brightness, temperature, hue, saturation]
 ```
 
-A media player as a mixer-fader row:
-
-```yaml
-type: custom:everyday-light-card
-entity: media_player.sofa
-slider:
-  style: mixer
-  show_buttons: true
-  orientation: horizontal
-```
-
 A nested apartment tree (the hero shot above):
 
 ```yaml
@@ -126,10 +114,10 @@ More recipes in [`docs/howto/`](docs/howto/).
 
 ## Documentation
 
-- [`docs/INSTALLATION.md`](docs/INSTALLATION.md) — HACS + manual install.
-- [`docs/wiki/`](docs/wiki/) — per-feature reference (quick-start, config schema, gestures, group-layout, color-wheel, saved-colors).
-- [`docs/howto/`](docs/howto/) — apartment-scenario recipes (bedside dimmer, hall group tile, movie-mode speaker, gradient mood, house-off shortcut, nested groups).
-- [`docs/adr/`](docs/adr/) — architecture decisions (popup-portal pattern, gesture detector, mindmap SVG).
+- [`docs/INSTALLATION.md`](docs/INSTALLATION.md): HACS + manual install.
+- [`docs/wiki/`](docs/wiki/): per-feature reference (quick-start, config schema, gestures, group-layout, color-wheel, saved-colors).
+- [`docs/howto/`](docs/howto/): apartment-scenario recipes (bedside dimmer, hall group tile, gradient mood, house-off shortcut, nested groups).
+- [`docs/adr/`](docs/adr/): architecture decisions (popup-portal pattern, gesture detector, mindmap SVG).
 
 ## Support the work
 
@@ -137,7 +125,7 @@ This card is free, MIT, and built by one person on the side. If it saved you an 
 
 [![Buy Me AI Tokens](https://img.shields.io/badge/Buy%20Me-AI%20Tokens-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/f17mkx) &nbsp; [![GitHub Sponsors](https://img.shields.io/github/sponsors/f17mkx?style=for-the-badge&logo=github&color=ea4aaa&label=Sponsor%20on%20GitHub)](https://github.com/sponsors/f17mkx)
 
-Every tip funds the next card in the family — `everyday-shutter-card`, `everyday-climate-card`, `everyday-media-card`.
+Every tip funds the next card in the family: `everyday-shutter-card`, `everyday-climate-card`, `everyday-media-card`, `everyday-themes`.
 
 ## Roadmap
 
@@ -145,17 +133,18 @@ Shipped: this card (v1.0.0).
 
 Next (rough order):
 
-- **everyday-shutter-card** — animated shutter/cover control with dark-mode + tilt-control.
-- **everyday-climate-card** — thermostat + zone-occupancy + comfort-range.
-- **everyday-media-card** — speaker-group control with cross-room sync.
-- **everyday-* dashboard pack** — a curated Lovelace strategy that uses all of them together.
+- **everyday-themes**: a coordinated theme pack for the everyday-card family with dark + light variants and the brand-token CSS vars all cards consume.
+- **everyday-shutter-card**: animated shutter / cover control with tilt and dark-mode theming.
+- **everyday-climate-card**: thermostat + zone-occupancy + comfort-range.
+- **everyday-media-card**: media-player control with cross-room sync.
+- **everyday-* dashboard pack**: a curated Lovelace strategy that uses all of them together.
 
 Follow [@f17mkx on GitHub](https://github.com/f17mkx) for releases.
 
 ## Contributing
 
-Bug reports + feature requests + PRs are welcome. See [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md).
+Bug reports, feature requests, PRs welcome. See [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
