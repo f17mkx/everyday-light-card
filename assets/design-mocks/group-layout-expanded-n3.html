@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>group-layout-expanded-n3</title>
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  /* slider sized to match classic-mode-popup tweak values
+     sliderWidth: 47, thumbScale: 0.78 → thumb ≈ 37px */
+  :root {
+    --slider-w: 47px;
+    --thumb-w: 37px;
+  }
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 28px 28px 24px;
+    width: 340px;
+  }
+
+  /* override shared .sp-slider sizing to match classic-popup tweaks */
+  .card .sp-slider {
+    width: var(--slider-w);
+    height: 170px;
+    border-radius: calc(var(--slider-w) / 2);
+  }
+  .card .sp-slider .sp-fill {
+    border-radius: calc(var(--slider-w) / 2);
+  }
+  .card .sp-slider .sp-thumb {
+    left: calc((var(--slider-w) - var(--thumb-w)) / 2);
+    width: var(--thumb-w);
+    height: var(--thumb-w);
+    bottom: clamp(
+      calc((var(--slider-w) - var(--thumb-w)) / 2),
+      calc((100% * var(--pct, 0) / 100) - var(--thumb-w) - calc((var(--slider-w) - var(--thumb-w)) / 2)),
+      calc(100% - var(--thumb-w) - calc((var(--slider-w) - var(--thumb-w)) / 2))
+    );
+  }
+
+  .sliders {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin-bottom: 18px;
+    justify-items: center;
+  }
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    position: relative;
+    z-index: 2;
+  }
+  .tile {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .tile .ic {
+    width: 50px; height: 50px; border-radius: 50%;
+    background: var(--tile);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--orange);
+  }
+  .tile.group .ic { width: 70px; height: 70px; }
+  .tile .lbl { color: var(--text-dim); font-size: 12px; }
+  .group-row { display: flex; justify-content: center; margin-top: -2px; position: relative; z-index: 2; }
+
+  /* Mindmap from mindmap-geometries-n2-n8.html (N=3 cubic Béziers
+     originating at the group node and fanning up to each member). */
+  .mindmap {
+    position: relative;
+    height: 110px;
+    margin: 4px 0 -4px;
+  }
+  .mindmap svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .glyph-bulb { width: 24px; height: 24px; }
+  .glyph-ceiling { width: 32px; height: 32px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="card" data-screen-label="Mock 1 — Group Layout Expanded">
+    <div class="sliders">
+      <div class="sp-slider"><div class="sp-fill" style="height:78%"></div><div class="sp-thumb" style="--pct:78">78</div></div>
+      <div class="sp-slider"><div class="sp-fill" style="height:75%"></div><div class="sp-thumb" style="--pct:75">75</div></div>
+      <div class="sp-slider"><div class="sp-fill" style="height:72%"></div><div class="sp-thumb" style="--pct:72">72</div></div>
+    </div>
+
+    <div class="tiles">
+      <div class="tile">
+        <div class="ic"><svg class="glyph-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.6 1 2.5h6c0-.9.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg></div>
+        <div class="lbl">Spot 1</div>
+      </div>
+      <div class="tile">
+        <div class="ic"><svg class="glyph-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.6 1 2.5h6c0-.9.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg></div>
+        <div class="lbl">Spot 2</div>
+      </div>
+      <div class="tile">
+        <div class="ic"><svg class="glyph-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.6 1 2.5h6c0-.9.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg></div>
+        <div class="lbl">Spot 3</div>
+      </div>
+    </div>
+
+    <div class="mindmap" aria-hidden="true">
+      <!--
+        N=3 geometry transplanted from mindmap-geometries-n2-n8.html.
+        Original viewBox 300×200. Members at y=30 (xs=30,150,270);
+        group at (150,170). Each path originates at the group node
+        and curves up to each member with cubic Bézier control points
+        computed by the same formula as the generator.
+        We trim the viewBox vertically to (yMembers-12) … (groupY-12)
+        so the lines start at the bottom edge of the member tiles
+        and end at the top edge of the group tile.
+      -->
+      <svg viewBox="0 18 300 152" preserveAspectRatio="none">
+        <g stroke="#f4b91d" stroke-width="2.6" fill="none" stroke-linecap="round" opacity="0.92">
+          <!-- left arm: M (150,170) C (106.8,121),(26.4,79),(30,30) -->
+          <path d="M 150 170 C 106.8 121, 26.4 79, 30 30"/>
+          <!-- center arm: M (150,170) C (150,121),(150,79),(150,30) -->
+          <path d="M 150 170 C 150 121, 150 79, 150 30"/>
+          <!-- right arm: M (150,170) C (193.2,121),(273.6,79),(270,30) -->
+          <path d="M 150 170 C 193.2 121, 273.6 79, 270 30"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="group-row">
+      <div class="tile group">
+        <div class="ic">
+          <svg class="glyph-ceiling" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 4h14"/><path d="M7 4l-1 6h12l-1-6"/>
+            <path d="M6 10h12a4 4 0 0 1-12 0z" fill="currentColor" fill-opacity="0.18"/>
+          </svg>
+        </div>
+        <div class="lbl">Hall Spots</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
+</content>
+</invoke>

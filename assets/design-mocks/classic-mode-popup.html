@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>classic-mode-popup</title>
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  body { padding: 32px 16px 60px; }
+
+  /* tweakable slider sizing — bound to --slider-w (track width) and
+     --thumb-w (knob diameter). Side-margin recalculated as (w - thumb)/2. */
+  .sp-slider {
+    width: var(--slider-w, 64px);
+    border-radius: calc(var(--slider-w, 64px) / 2);
+  }
+  .sp-slider .sp-fill { border-radius: calc(var(--slider-w, 64px) / 2); }
+  .sp-slider .sp-thumb {
+    left: calc((var(--slider-w, 64px) - var(--thumb-w, 50px)) / 2);
+    width: var(--thumb-w, 50px);
+    height: var(--thumb-w, 50px);
+    bottom: clamp(
+      calc((var(--slider-w, 64px) - var(--thumb-w, 50px)) / 2),
+      calc((100% * var(--pct, 0) / 100) - var(--thumb-w, 50px) - calc((var(--slider-w, 64px) - var(--thumb-w, 50px)) / 2)),
+      calc(100% - var(--thumb-w, 50px) - calc((var(--slider-w, 64px) - var(--thumb-w, 50px)) / 2))
+    );
+  }
+  .temp-track {
+    width: var(--slider-w, 64px);
+    border-radius: calc(var(--slider-w, 64px) / 2);
+  }
+  .temp-track .knob {
+    width: var(--slider-w, 64px);
+    height: var(--slider-w, 64px);
+  }
+  .stack {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 22px;
+  }
+  @media (max-width: 980px) { .stack { grid-template-columns: 1fr; } }
+
+  .variant-title {
+    grid-column: 1 / -1;
+    color: var(--text-faint);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin: 8px 0 0;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .variant-title:first-of-type { border-top: none; padding-top: 0; }
+
+  /* dialog */
+  .dialog {
+    width: 100%;
+    background: #2a2a3d;
+    border-radius: 18px;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.4);
+    padding: 22px 22px 22px;
+    border: 1px solid rgba(255,255,255,0.05);
+    position: relative;
+  }
+  .titlebar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .titlebar .t {
+    font-size: 16px; font-weight: 500; color: var(--text);
+  }
+  .titlebar .iconbtn {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-dim);
+  }
+  .titlebar svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  .v-label {
+    color: var(--text-faint);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  /* main slider area — focus */
+  .slider-stage {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 14px 0 6px;
+  }
+
+  /* trio under slider: inverted triangle (wheel & temp at top, saved at bottom) */
+  .trio {
+    position: relative;
+    width: 140px; height: 110px;
+  }
+  .pdot {
+    position: absolute;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: var(--tile);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--orange);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+  }
+  .pdot.sel {
+    transform: translate(-50%, -50%) scale(1.12);
+    box-shadow: 0 0 0 2px var(--orange), 0 0 18px rgba(248,141,42,0.5), 0 4px 12px rgba(0,0,0,0.45);
+  }
+  .pdot svg, .pdot .seven { width: 20px; height: 20px; }
+
+  /* effects-row (4 modes use diamond) */
+  .quad {
+    position: relative;
+    width: 140px; height: 140px;
+  }
+
+  /* color temp track */
+  .temp-track {
+    width: 64px;
+    height: 220px;
+    border-radius: 32px;
+    /* inverted: warm white on top, cool white at bottom */
+    background: linear-gradient(180deg, #ffd9a8 0%, #fffaf0 50%, #cfe4ff 100%);
+    position: relative;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+  }
+  .temp-track .knob {
+    position: absolute; left: 50%;
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    /* white outer ring — fills the full width of the track */
+    background: #ffffff;
+    transform: translate(-50%, 50%);
+    border: 2px solid rgba(255,255,255,0.92);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.35);
+    bottom: 35%;
+    display: flex; align-items: center; justify-content: center;
+    color: #6b6b75; font-size: 11px;
+    font-weight: 500;
+  }
+  /* inner colored disc — sunken into the white knob via inset shadow */
+  .temp-track .knob::before {
+    content: "";
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background: var(--current-light, #fff5e0);
+    box-shadow:
+      inset 0 3px 5px rgba(0,0,0,0.35),
+      inset 0 1px 2px rgba(0,0,0,0.25),
+      inset 0 -1px 1px rgba(255,255,255,0.35);
+  }
+  .temp-track .knob { color: transparent; } /* hide the K-label so the disc reads cleanly */
+
+  /* color wheel */
+  .wheel {
+    width: 220px; height: 220px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at center, #fff 0%, rgba(255,255,255,0) 70%),
+      conic-gradient(from 0deg, #ff3b3b, #ffe43b, #4eff3b, #3bffd3, #3b8aff, #c63bff, #ff3bd9, #ff3b3b);
+    position: relative;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+  }
+  .wheel .marker {
+    position: absolute;
+    top: 30%; left: 70%;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #1a1a26;
+    transform: translate(-50%, -50%);
+  }
+
+  /* saved-colors row at bottom (variant 4) */
+  .saved-row {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  .saved-row .row-lbl {
+    color: var(--text-faint);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+  .saved-row .stage7 {
+    width: 280px; height: 130px;
+    margin: 0 auto;
+    position: relative;
+  }
+  /* hex stage standing in for slider — match slider footprint (220px tall) */
+  .stage7.in-slider {
+    width: 220px; height: 220px;
+    position: relative;
+  }
+  .swatch {
+    position: absolute;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.18);
+    transform: translate(-50%, -50%);
+  }
+
+  /* effects list */
+  .fx-list {
+    display: flex; flex-direction: column; gap: 8px;
+    width: 100%; max-width: 220px;
+  }
+  .fx-item {
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.18);
+    color: var(--text-dim);
+    font-size: 13px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .fx-item.on { background: rgba(248,141,42,0.16); color: var(--orange); }
+  .fx-item .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: 0.6; }
+
+  /* tiny svg helpers */
+  .g { stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .seven circle { fill: currentColor; }
+
+  .caption {
+    margin: 8px 0 0;
+    color: var(--text-faint);
+    font-size: 11px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="stack" data-screen-label="Mock 5 — Classic Mode Popup">
+
+  <!-- ─── Variant A · brightness selected (default slider) ─── -->
+  <div class="variant-title">A · 3-mode trio under slider · inverted triangle</div>
+
+  <div class="dialog">
+    <div class="titlebar">
+      <div class="t">Hall Door</div>
+      <div class="iconbtn">
+        <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </div>
+    </div>
+    <div class="v-label">brightness · 70%</div>
+    <div class="slider-stage">
+      <div class="sp-slider">
+        <div class="sp-fill" style="height: 70%"></div>
+        <div class="sp-thumb" style="--pct: 70; border-style: none">163</div>
+      </div>
+      <!-- trio: wheel & temp at slider's bottom edge (left/right), 7-dot below in line with slider -->
+      <div class="trio" id="trioA"></div>
+    </div>
+    <div class="caption">trio: temp ◀ slider-base ▶ wheel · saved 7-dot in-line below</div>
+  </div>
+
+  <!-- temp selected → slider switches to temp track -->
+  <div class="dialog">
+    <div class="titlebar">
+      <div class="t">Hall Door</div>
+      <div class="iconbtn">
+        <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </div>
+    </div>
+    <div class="v-label">color temperature · 3000K</div>
+    <div class="slider-stage">
+      <div class="temp-track"><div class="knob" style="border-radius: 60px">3K</div></div>
+      <div class="trio" id="trioA-temp"></div>
+    </div>
+    <div class="caption">temp selected → slider switches to gradient track</div>
+  </div>
+
+  <!-- wheel selected → wheel replaces slider -->
+  <div class="dialog">
+    <div class="titlebar">
+      <div class="t">Hall Door</div>
+      <div class="iconbtn">
+        <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </div>
+    </div>
+    <div class="v-label">color · hsv</div>
+    <div class="slider-stage">
+      <div class="wheel"><div class="marker"></div></div>
+      <div class="trio" id="trioA-wheel"></div>
+    </div>
+    <div class="caption">wheel selected → wheel appears in place of slider</div>
+  </div>
+
+  <!-- saved selected → saved colors hex appears in place of slider -->
+  <div class="dialog">
+    <div class="titlebar">
+      <div class="t">Hall Door</div>
+      <div class="iconbtn">
+        <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </div>
+    </div>
+    <div class="v-label">saved colors · 7</div>
+    <div class="slider-stage">
+      <div class="stage7 in-slider" id="hex7"></div>
+      <div class="trio" id="trioA-saved"></div>
+    </div>
+    <div class="caption">saved selected → 7-hex layout in place of slider</div>
+  </div>
+
+  <!-- ─── Variant B · 4 modes (effects added) ─── -->
+  <div class="variant-title">B · 4-mode picker · adds Effects (diamond)</div>
+
+  <div class="dialog">
+    <div class="titlebar">
+      <div class="t">Hall Door</div>
+      <div class="iconbtn">
+        <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </div>
+    </div>
+    <div class="v-label">brightness · 70%</div>
+    <div class="slider-stage">
+      <div class="sp-slider">
+        <div class="sp-fill" style="height: 70%"></div>
+        <div class="sp-thumb" style="--pct: 70">163</div>
+      </div>
+      <div class="quad" id="quadB"></div>
+    </div>
+    <div class="caption">4-mode diamond: temp · wheel · saved · FX</div>
+  </div>
+
+  <div class="dialog">
+    <div class="titlebar">
+      <div class="t">Hall Door</div>
+      <div class="iconbtn">
+        <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </div>
+    </div>
+    <div class="v-label">effects</div>
+    <div class="slider-stage">
+      <div class="fx-list" style="width: 147px">
+        <div class="fx-item on" style="text-align: left"><span>None</span><span class="dot"></span></div>
+        <div class="fx-item"><span>Loop</span></div>
+        <div class="fx-item"><span>Candle</span></div>
+        <div class="fx-item"><span>Fire</span></div>
+      </div>
+      <div class="quad" id="quadB-fx"></div>
+    </div>
+    <div class="caption">FX selected → effects list replaces slider</div>
+  </div>
+
+  <!-- ─── Variant C · saved-colors moved BELOW slider+trio ─── -->
+  <div class="variant-title">C · saved-colors row anchored at bottom of dialog</div>
+
+  <div class="dialog">
+    <div class="titlebar">
+      <div class="t">Hall Door</div>
+      <div class="iconbtn">
+        <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </div>
+    </div>
+    <div class="v-label">brightness · 70%</div>
+    <div class="slider-stage">
+      <div class="sp-slider">
+        <div class="sp-fill" style="height: 0%"></div>
+        <div class="sp-thumb" style="--pct: 0">163</div>
+      </div>
+      <!-- trio without saved here, since saved lives below -->
+      <div class="trio" id="trioC"></div>
+    </div>
+    <div class="saved-row">
+      <div class="row-lbl">Saved</div>
+      <div class="stage7" id="hex7C"></div>
+    </div>
+    <div class="caption">2-mode picker (temp · wheel) above · saved-row spans width below</div>
+  </div>
+
+  <div class="dialog">
+    <div class="titlebar">
+      <div class="t">Hall Door</div>
+      <div class="iconbtn">
+        <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </div>
+    </div>
+    <div class="v-label">color · hsv</div>
+    <div class="slider-stage">
+      <div class="wheel"><div class="marker"></div></div>
+      <div class="trio" id="trioC-wheel"></div>
+    </div>
+    <div class="saved-row">
+      <div class="row-lbl">Saved</div>
+      <div class="stage7" id="hex7C-wheel"></div>
+    </div>
+    <div class="caption">wheel selected · saved-row still anchored below</div>
+  </div>
+
+</div>
+
+<script>
+const ICONS = {
+  thermo: `<svg class="g" viewBox="0 0 24 24"><path d="M14 14.76V4.5a2.5 2.5 0 0 0-5 0v10.26a4 4 0 1 0 5 0z"/><line x1="11.5" y1="14" x2="11.5" y2="8"/></svg>`,
+  wheel:  `<svg class="g" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1 0 1.5-.6 1.5-1.5 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.6-1.5 1.5-1.5H16a5 5 0 0 0 5-5c0-4-4-7.6-9-7.6z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7" r="1"/><circle cx="16.5" cy="10.5" r="1"/></svg>`,
+  saved:  `<svg class="seven" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="1.6"/><circle cx="15.5" cy="18.06" r="1.6"/><circle cx="8.5" cy="18.06" r="1.6"/><circle cx="5" cy="12" r="1.6"/><circle cx="8.5" cy="5.94" r="1.6"/><circle cx="15.5" cy="5.94" r="1.6"/></svg>`,
+  fx:     `<svg class="g" viewBox="0 0 24 24"><polygon points="12 3 14 9 20 9 15 13 17 19 12 16 7 19 9 13 4 9 10 9"/></svg>`,
+};
+
+// Inverted triangle trio: temp top-left, wheel top-right, saved bottom-center
+// (top edge of trio aligns with slider's bottom — wheel & temp flank slider's base)
+function buildTrio(elId, items, selectedIdx) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const cx = 70, cyTop = 22, cyBot = 88, dx = 50;
+  const positions = [
+    { x: cx - dx, y: cyTop },  // temp top-left
+    { x: cx + dx, y: cyTop },  // wheel top-right
+    { x: cx,      y: cyBot },  // saved bottom-center, in line with slider
+  ];
+  items.forEach((icon, i) => {
+    const d = document.createElement("div");
+    d.className = "pdot" + (i === selectedIdx ? " sel" : "");
+    d.style.left = positions[i].x + "px";
+    d.style.top  = positions[i].y + "px";
+    d.innerHTML = ICONS[icon];
+    el.appendChild(d);
+  });
+}
+
+// 2-mode pair (Variant C above saved-row) — temp left, wheel right
+function buildPair(elId, items, selectedIdx) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const cy = 55;
+  const positions = [
+    { x: 30, y: cy },
+    { x: 110, y: cy },
+  ];
+  items.forEach((icon, i) => {
+    const d = document.createElement("div");
+    d.className = "pdot" + (i === selectedIdx ? " sel" : "");
+    d.style.left = positions[i].x + "px";
+    d.style.top  = positions[i].y + "px";
+    d.innerHTML = ICONS[icon];
+    el.appendChild(d);
+  });
+}
+
+// 4-mode diamond
+function buildQuad(elId, items, selectedIdx) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const cx = 70, cy = 70;
+  const positions = [
+    { x: cx,      y: cy - 42 },  // top: temp
+    { x: cx + 42, y: cy },        // right: wheel
+    { x: cx,      y: cy + 42 },  // bottom: saved
+    { x: cx - 42, y: cy },        // left: fx
+  ];
+  items.forEach((icon, i) => {
+    const d = document.createElement("div");
+    d.className = "pdot" + (i === selectedIdx ? " sel" : "");
+    d.style.left = positions[i].x + "px";
+    d.style.top  = positions[i].y + "px";
+    d.innerHTML = ICONS[icon];
+    el.appendChild(d);
+  });
+}
+
+// Variant A trios — 3 mode (temp / wheel / saved)
+buildTrio("trioA",        ["thermo","wheel","saved"], -1);
+buildTrio("trioA-temp",   ["thermo","wheel","saved"], 0);
+buildTrio("trioA-wheel",  ["thermo","wheel","saved"], 1);
+buildTrio("trioA-saved",  ["thermo","wheel","saved"], 2);
+
+// Variant B quads — 4 modes (temp / wheel / saved / fx)
+buildQuad("quadB",    ["thermo","wheel","saved","fx"], -1);
+buildQuad("quadB-fx", ["thermo","wheel","saved","fx"], 3);
+
+// Variant C pairs — 2 modes only (saved is below)
+buildPair("trioC",       ["thermo","wheel"], -1);
+buildPair("trioC-wheel", ["thermo","wheel"], 1);
+
+// 7-hex saved layout
+const PALETTE = ["#f47a00","#f8b27e","#fae8d2","#ffffff","#7e9ef8","#b27ef8","#f87ed8"];
+function buildHex(elId, w, h, scale) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const cx = w/2, cy = h/2;
+  const r = 38 * scale;
+  const positions = [
+    { x: cx, y: cy },
+    ...[0,60,120,180,240,300].map(d => {
+      const a = (d - 90) * Math.PI/180;
+      return { x: cx + r*Math.cos(a), y: cy + r*Math.sin(a) };
+    })
+  ];
+  positions.forEach((p, i) => {
+    const s = document.createElement("div");
+    s.className = "swatch";
+    s.style.left = p.x + "px";
+    s.style.top = p.y + "px";
+    s.style.background = PALETTE[i];
+    el.appendChild(s);
+  });
+}
+buildHex("hex7", 220, 220, 1.0);
+buildHex("hex7C", 280, 130, 1.0);
+buildHex("hex7C-wheel", 280, 130, 1.0);
+</script>
+
+<!-- Tweaks panel mount -->
+<div id="tweaks-root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "sliderWidth": 47,
+  "thumbScale": 0.78
+}/*EDITMODE-END*/;
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  // Apply width to all .sp-slider and .temp-track via CSS vars on :root.
+  // thumb diameter scales with track width by --thumbScale (default 0.78 → 50/64).
+  React.useEffect(() => {
+    const w = t.sliderWidth;
+    const thumb = Math.round(w * t.thumbScale);
+    document.documentElement.style.setProperty("--slider-w", w + "px");
+    document.documentElement.style.setProperty("--thumb-w", thumb + "px");
+  }, [t.sliderWidth, t.thumbScale]);
+
+  return (
+    <TweaksPanel title="Tweaks">
+      <TweakSection label="Slider sizing" />
+      <TweakSlider label="Track width" value={t.sliderWidth} min={40} max={120} step={1} unit="px"
+                   onChange={(v) => setTweak('sliderWidth', v)} />
+      <TweakSlider label="Thumb ratio" value={t.thumbScale} min={0.5} max={0.95} step={0.01}
+                   onChange={(v) => setTweak('thumbScale', v)} />
+    </TweaksPanel>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("tweaks-root")).render(<App />);
+</script>
+</body>
+</html>

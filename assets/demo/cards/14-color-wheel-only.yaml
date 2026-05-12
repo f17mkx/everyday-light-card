@@ -1,0 +1,17 @@
+# Card 14 — Color-wheel-only standalone (NEEDS R63, deferred to P21)
+#
+# Real-life: pure color-pick tile. No slider, no mindmap — just the wheel
+# always-rendered, tap-to-pick. Pair with Card 1 (brightness slider) in a
+# horizontal-stack for [brightness] | [color] split-control.
+#
+# Status: requires the still-unimplemented `view: color-wheel` render-mode
+# (R63 backlog). Today the wheel only shows as an in-place popup over the
+# slider, dismissable on outside-click.
+
+type: custom:everyday-light-card
+entity: light.main
+view: color-wheel  # R63 — not yet implemented as of P15.6
+color_wheel:
+  type: stepped
+  hue_segments: 12
+  saturation_rings: 4

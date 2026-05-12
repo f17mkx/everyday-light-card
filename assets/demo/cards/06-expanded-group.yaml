@@ -1,0 +1,14 @@
+# Card 6 — Expanded group (always-on topology view)
+#
+# Real-life: hall control surface that wants to show all 3 spots at once.
+# Each member gets its own slider; group-master at the top. Mindmap path
+# connects the group to its members visually.
+#
+# Per-member: long-press → mode-picker. Tap → toggle that single light.
+# Drag a slider → adjust just that member's brightness.
+
+type: custom:everyday-light-card
+entity: light.hall_spots
+group:
+  layout: expanded
+  full_length_sliders: false  # 220 px (post-r25); set true for 260 px

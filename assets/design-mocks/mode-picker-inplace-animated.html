@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>mode-picker-inplace · animated</title>
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  body { padding: 40px 24px; }
+  .wrap { max-width: 1200px; margin: 0 auto; }
+
+  header {
+    margin-bottom: 28px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding-bottom: 22px;
+    display: flex; align-items: end; justify-content: space-between; gap: 24px;
+    flex-wrap: wrap;
+  }
+  .eyebrow { color: var(--orange); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; margin-bottom: 10px; }
+  h1 { margin: 0 0 8px; font-size: 28px; font-weight: 400; letter-spacing: -0.01em; }
+  .lede { color: var(--text-dim); font-size: 13px; max-width: 640px; line-height: 1.55; margin: 0; }
+
+  /* ── transport controls ──────────────────────── */
+  .transport {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--card);
+    border-radius: 999px;
+    padding: 8px 10px 8px 14px;
+    box-shadow: var(--shadow);
+  }
+  .transport button {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.14);
+    color: var(--text);
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+    font-family: inherit;
+    padding: 0;
+  }
+  .transport button:hover { border-color: rgba(248,141,42,0.6); }
+  .transport button:active { transform: scale(0.95); }
+  .transport button.primary {
+    background: var(--orange);
+    border-color: var(--orange);
+    color: #1a1a26;
+  }
+  .transport button svg { width: 16px; height: 16px; fill: currentColor; }
+  .transport .scrubber {
+    flex: 1; min-width: 280px;
+    -webkit-appearance: none; appearance: none;
+    background: transparent;
+    height: 22px;
+    cursor: pointer;
+  }
+  .transport .scrubber::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 2px;
+    background: linear-gradient(to right,
+      var(--orange) 0%, var(--orange) calc(var(--p, 0) * 100%),
+      rgba(255,255,255,0.12) calc(var(--p, 0) * 100%), rgba(255,255,255,0.12) 100%);
+  }
+  .transport .scrubber::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #fff; margin-top: -5px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  }
+  .transport .scrubber::-moz-range-track {
+    height: 4px; border-radius: 2px;
+    background: linear-gradient(to right,
+      var(--orange) 0%, var(--orange) calc(var(--p, 0) * 100%),
+      rgba(255,255,255,0.12) calc(var(--p, 0) * 100%), rgba(255,255,255,0.12) 100%);
+  }
+  .transport .scrubber::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #fff; border: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  }
+  .transport .time {
+    color: var(--text-dim);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    min-width: 78px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── frame layout ──────────────────────── */
+  .frame {
+    background: var(--card);
+    border-radius: 24px;
+    padding: 24px 24px 22px;
+    box-shadow: var(--shadow);
+    margin-bottom: 22px;
+  }
+  .frame-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 18px;
+    gap: 12px;
+  }
+  .frame-title {
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--text-faint);
+  }
+  .phase-tag {
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--orange);
+    font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 880px) { .row { grid-template-columns: 1fr; } }
+
+  .stage-card {
+    background: var(--bg-navy-deep);
+    border-radius: 16px;
+    padding: 18px 14px 16px;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .stage-card h3 {
+    margin: 0;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--text-faint);
+    font-weight: 500;
+  }
+  .stage {
+    width: 220px; height: 180px;
+    position: relative;
+  }
+
+  /* ── picker dot system (absolute positioning, transform-driven anim) ── */
+  .pdot {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 50px; height: 50px;
+    border-radius: 50%;
+    background: var(--tile);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--orange);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    /* transforms layered:
+       --tx, --ty: target offset for current phase (set by JS per-frame)
+       --s:        scale
+       --o:        opacity */
+    transform:
+      translate(-50%, -50%)
+      translate(var(--tx, 0px), var(--ty, 0px))
+      scale(var(--s, 1));
+    opacity: var(--o, 1);
+    will-change: transform, opacity;
+  }
+  /* the "anchor" / parent dot - the one that was originally there */
+  .pdot.anchor { z-index: 3; }
+  /* siblings revealed during expansion */
+  .pdot.sib { z-index: 2; }
+
+  /* charging ring shown during long-press */
+  .charge-ring {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 70px; height: 70px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%) scale(var(--cs, 0.7));
+    border: 2px solid var(--orange);
+    opacity: var(--co, 0);
+    pointer-events: none;
+    box-shadow: 0 0 24px rgba(248,141,42,0.35);
+  }
+  .charge-ring.outer {
+    width: 92px; height: 92px;
+    border-color: rgba(248,141,42,0.4);
+    border-width: 1px;
+    box-shadow: none;
+  }
+
+  /* selection halo — appears under the chosen dot */
+  .sel-halo {
+    position: absolute;
+    width: 64px; height: 64px;
+    left: 50%; top: 50%;
+    border-radius: 50%;
+    transform: translate(-50%, -50%) translate(var(--htx, 0px), var(--hty, 0px)) scale(var(--hs, 0.5));
+    background: radial-gradient(circle, rgba(248,141,42,0.45) 0%, rgba(248,141,42,0.12) 60%, transparent 100%);
+    opacity: var(--ho, 0);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* labels under stage */
+  .picker-labels {
+    display: flex; gap: 12px;
+    color: var(--text-dim); font-size: 11px;
+    flex-wrap: wrap; justify-content: center;
+    min-height: 16px;
+    letter-spacing: 0.04em;
+  }
+  .picker-labels span {
+    width: 56px; text-align: center;
+    transition: color 0.18s ease, opacity 0.18s ease;
+    opacity: var(--label-o, 0);
+  }
+  .picker-labels span.on { color: var(--orange); font-weight: 500; }
+
+  /* svg glyphs */
+  .g { width: 22px; height: 22px; display: block; }
+  .g-thermo, .g-palette, .g-bulb, .g-fx { stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .seven-dot circle { fill: currentColor; }
+
+  /* phase badge inside each stage card */
+  .phase-row {
+    display: flex; gap: 4px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--text-faint);
+  }
+  .phase-row .pf {
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.04);
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .phase-row .pf.active {
+    background: rgba(248,141,42,0.18);
+    color: var(--orange);
+  }
+
+  .legend {
+    margin-top: 18px;
+    color: var(--text-faint);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    line-height: 1.7;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 8px 22px;
+  }
+  .legend b {
+    color: var(--orange); font-weight: 500;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 10px; letter-spacing: 0.1em;
+    margin-right: 6px;
+  }
+
+  .back {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--text-faint); text-decoration: none; font-size: 11px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    margin-bottom: 14px;
+    transition: color 0.15s ease;
+  }
+  .back:hover { color: var(--orange); }
+
+  /* ── speed selector ── */
+  .speeds {
+    display: inline-flex;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.32);
+    padding: 3px;
+    gap: 0;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+  .speeds button {
+    width: auto;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    color: var(--text-faint);
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+  .speeds button.on { background: var(--orange); color: #1a1a26; }
+  .speeds button:hover:not(.on) { color: var(--text); }
+
+</style>
+</head>
+<body>
+<div class="wrap" data-screen-label="Mock 3 — Mode Picker (animated)">
+
+  <a class="back" href="index.html">← Back to index</a>
+
+  <header>
+    <div>
+      <div class="eyebrow">Mock 3 · animated</div>
+      <h1>Mode-Picker · In-Place Expansion</h1>
+      <p class="lede">
+        Sequenz: idle → long-press (charging ring, 500ms) → expansion (siblings fan out, S-curve mit slight overshoot) → selection (halo, labels glow) → commit (collapse zurück auf gewählten Mode). 2-, 3- und 4-mode geometries laufen synchron.
+      </p>
+    </div>
+    <div class="speeds" id="speedsCtrl">
+      <button data-speed="0.5">0.5×</button>
+      <button data-speed="1" class="on">1×</button>
+      <button data-speed="2">2×</button>
+    </div>
+  </header>
+
+  <!-- transport bar -->
+  <div class="frame" style="padding: 14px 18px;">
+    <div class="transport">
+      <button id="playBtn" class="primary" aria-label="Play / Pause">
+        <svg id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button id="restartBtn" aria-label="Restart">
+        <svg viewBox="0 0 24 24"><path d="M12 5V2L8 6l4 4V7c3.3 0 6 2.7 6 6s-2.7 6-6 6-6-2.7-6-6H4c0 4.4 3.6 8 8 8s8-3.6 8-8-3.6-8-8-8z"/></svg>
+      </button>
+      <input type="range" id="scrub" class="scrubber" min="0" max="1000" value="0" step="1">
+      <div class="time" id="timeLabel">0.00s · idle</div>
+    </div>
+  </div>
+
+  <!-- the three pickers, one per row, sharing global timeline -->
+  <div class="frame">
+    <div class="frame-head">
+      <div class="frame-title">3 · 2 · 4 mode geometries · synchrone sequence</div>
+      <div class="phase-tag" id="phaseLabel">phase: idle</div>
+    </div>
+
+    <div class="row">
+
+      <!-- 3-MODE TRIANGLE -->
+      <div class="stage-card">
+        <h3>3 modes · triangle</h3>
+        <div class="stage" id="stage3"></div>
+        <div class="picker-labels" id="labels3">
+          <span data-i="0">Temp</span>
+          <span data-i="1">Saved</span>
+          <span data-i="2">Wheel</span>
+        </div>
+        <div class="phase-row">
+          <span class="pf" data-pf="idle">idle</span>
+          <span class="pf" data-pf="press">press</span>
+          <span class="pf" data-pf="expand">expand</span>
+          <span class="pf" data-pf="select">select</span>
+          <span class="pf" data-pf="commit">commit</span>
+        </div>
+      </div>
+
+      <!-- 2-MODE PAIR -->
+      <div class="stage-card">
+        <h3>2 modes · pair</h3>
+        <div class="stage" id="stage2"></div>
+        <div class="picker-labels" id="labels2">
+          <span data-i="0">Temp</span>
+          <span data-i="1">Wheel</span>
+        </div>
+        <div class="phase-row">
+          <span class="pf" data-pf="idle">idle</span>
+          <span class="pf" data-pf="press">press</span>
+          <span class="pf" data-pf="expand">expand</span>
+          <span class="pf" data-pf="select">select</span>
+          <span class="pf" data-pf="commit">commit</span>
+        </div>
+      </div>
+
+      <!-- 4-MODE DIAMOND -->
+      <div class="stage-card">
+        <h3>4 modes · diamond</h3>
+        <div class="stage" id="stage4"></div>
+        <div class="picker-labels" id="labels4">
+          <span data-i="0">Temp</span>
+          <span data-i="1">Wheel</span>
+          <span data-i="2">Saved</span>
+          <span data-i="3">FX</span>
+        </div>
+        <div class="phase-row">
+          <span class="pf" data-pf="idle">idle</span>
+          <span class="pf" data-pf="press">press</span>
+          <span class="pf" data-pf="expand">expand</span>
+          <span class="pf" data-pf="select">select</span>
+          <span class="pf" data-pf="commit">commit</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="legend">
+      <div><b>0.0–0.5s</b> idle · breathing</div>
+      <div><b>0.5–1.0s</b> long-press · charging ring</div>
+      <div><b>1.0–1.6s</b> expand · S-curve fan-out, overshoot</div>
+      <div><b>1.6–2.4s</b> select · halo grows under chosen dot</div>
+      <div><b>2.4–3.2s</b> commit · siblings retract, anchor swaps</div>
+      <div><b>3.2–3.6s</b> hold · settled new mode</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ─────────────────────────────────────────────────────────────
+   ICON LIBRARY
+   ───────────────────────────────────────────────────────────── */
+const ICONS = {
+  thermo: `<svg class="g g-thermo" viewBox="0 0 24 24"><path d="M14 14.76V4.5a2.5 2.5 0 0 0-5 0v10.26a4 4 0 1 0 5 0z"/><line x1="11.5" y1="14" x2="11.5" y2="8"/></svg>`,
+  wheel:  `<svg class="g g-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1 0 1.5-.6 1.5-1.5 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.6-1.5 1.5-1.5H16a5 5 0 0 0 5-5c0-4-4-7.6-9-7.6z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7" r="1"/><circle cx="16.5" cy="10.5" r="1"/></svg>`,
+  saved:  `<svg class="g seven-dot" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="1.6"/><circle cx="15.5" cy="18.06" r="1.6"/><circle cx="8.5" cy="18.06" r="1.6"/><circle cx="5" cy="12" r="1.6"/><circle cx="8.5" cy="5.94" r="1.6"/><circle cx="15.5" cy="5.94" r="1.6"/></svg>`,
+  bulb:   `<svg class="g g-bulb" viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.6 1 2.5h6c0-.9.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>`,
+  fx:     `<svg class="g g-fx" viewBox="0 0 24 24"><polygon points="12 3 14 9 20 9 15 13 17 19 12 16 7 19 9 13 4 9 10 9"/></svg>`,
+};
+
+/* ─────────────────────────────────────────────────────────────
+   GEOMETRIES — target offsets per dot at "fully expanded"
+   anchorIndex = which dot was the original (stays at 0,0 at start
+   of expansion, others fly out from 0,0).
+   selectedIndex = which dot is chosen during select phase.
+   commitIndex = which dot becomes the new anchor (= selected).
+   ───────────────────────────────────────────────────────────── */
+const r3 = 50;
+const GEO = {
+  // 3-mode equilateral triangle, point-down. Anchor starts as Saved (top-right).
+  // labels order in DOM: 0=Temp, 1=Saved, 2=Wheel
+  three: {
+    dots: [
+      { icon: "thermo", x: -r3 * Math.cos(Math.PI/6), y: -r3 * Math.sin(Math.PI/6) }, // Temp top-left
+      { icon: "saved",  x:  r3 * Math.cos(Math.PI/6), y: -r3 * Math.sin(Math.PI/6) }, // Saved top-right
+      { icon: "wheel",  x: 0, y: r3 },                                               // Wheel bottom
+    ],
+    anchorIdx: 1,    // Saved was the original mode
+    selectIdx: 2,    // user picks Wheel
+  },
+  // 2-mode pair side-by-side. Anchor starts as Temp (left).
+  two: {
+    dots: [
+      { icon: "thermo", x: -36, y: 0 },
+      { icon: "wheel",  x:  36, y: 0 },
+    ],
+    anchorIdx: 0,
+    selectIdx: 1,
+  },
+  // 4-mode diamond. Anchor starts as Wheel (right).
+  four: {
+    dots: [
+      { icon: "thermo", x:  0,  y: -50 },
+      { icon: "wheel",  x:  50, y:  0 },
+      { icon: "saved",  x:  0,  y:  50 },
+      { icon: "fx",     x: -50, y:  0 },
+    ],
+    anchorIdx: 1,
+    selectIdx: 3,    // user picks FX
+  },
+};
+
+/* ─────────────────────────────────────────────────────────────
+   BUILD STAGES
+   ───────────────────────────────────────────────────────────── */
+function buildStage(stageEl, geo) {
+  // charging rings (rendered behind dots)
+  const ringInner = document.createElement("div"); ringInner.className = "charge-ring";
+  const ringOuter = document.createElement("div"); ringOuter.className = "charge-ring outer";
+  stageEl.appendChild(ringInner);
+  stageEl.appendChild(ringOuter);
+
+  // selection halo
+  const halo = document.createElement("div"); halo.className = "sel-halo";
+  stageEl.appendChild(halo);
+
+  const dotEls = geo.dots.map((d, i) => {
+    const el = document.createElement("div");
+    el.className = "pdot" + (i === geo.anchorIdx ? " anchor" : " sib");
+    el.dataset.i = i;
+    // anchor starts with the bulb (the "Light" entry-point icon),
+    // siblings get their mode icon. We swap the anchor's glyph to its
+    // real mode icon at the very start of the expand phase.
+    if (i === geo.anchorIdx) {
+      el.dataset.modeIcon = d.icon;
+      el.innerHTML = ICONS.bulb;
+    } else {
+      el.innerHTML = ICONS[d.icon];
+    }
+    stageEl.appendChild(el);
+    return el;
+  });
+
+  return { dotEls, ringInner, ringOuter, halo, anchorSwapped: false };
+}
+
+const stages = {
+  three: { el: document.getElementById("stage3"), labels: document.getElementById("labels3"), geo: GEO.three },
+  two:   { el: document.getElementById("stage2"), labels: document.getElementById("labels2"), geo: GEO.two   },
+  four:  { el: document.getElementById("stage4"), labels: document.getElementById("labels4"), geo: GEO.four  },
+};
+for (const k in stages) {
+  Object.assign(stages[k], buildStage(stages[k].el, stages[k].geo));
+}
+
+/* ─────────────────────────────────────────────────────────────
+   TIMELINE
+   ───────────────────────────────────────────────────────────── */
+const TL = {
+  idle:    { start: 0.00, end: 0.50 },
+  press:   { start: 0.50, end: 1.00 },
+  expand:  { start: 1.00, end: 1.60 },
+  select:  { start: 1.60, end: 2.40 },
+  commit:  { start: 2.40, end: 3.20 },
+  hold:    { start: 3.20, end: 3.60 },
+};
+const TOTAL = 3.60; // seconds
+
+/* ─── easing helpers ─── */
+const clamp = (v, a=0, b=1) => Math.max(a, Math.min(b, v));
+const lerp  = (a, b, t) => a + (b - a) * t;
+// Ease-out cubic
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+// Ease-in-out cubic (S-curve)
+const easeInOut = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+// Back-out (overshoot)
+const backOut = (t, s = 1.7) => {
+  const c1 = s, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+};
+// Phase-local progress 0..1
+function ph(time, phase) {
+  const { start, end } = TL[phase];
+  return clamp((time - start) / (end - start));
+}
+function currentPhase(time) {
+  if (time < TL.press.start) return "idle";
+  if (time < TL.expand.start) return "press";
+  if (time < TL.select.start) return "expand";
+  if (time < TL.commit.start) return "select";
+  if (time < TL.hold.start) return "commit";
+  return "hold";
+}
+
+/* ─────────────────────────────────────────────────────────────
+   FRAME — render every dot, ring, halo at given global time
+   ───────────────────────────────────────────────────────────── */
+function frame(stage, time) {
+  const geo = stage.geo;
+  const { dotEls, ringInner, ringOuter, halo, labels } = stage;
+  const anchor = geo.anchorIdx;
+  const select = geo.selectIdx;
+
+  // ── icon swap on the anchor ──
+  // before expand: bulb (light entry-point). during/after expand: mode icon.
+  // during commit: bulb returns (we're consolidating to a single light again).
+  const anchorEl = dotEls[anchor];
+  const wantBulb = time < TL.expand.start || time >= TL.commit.start + 0.4;
+  const isBulb = anchorEl.dataset.showing === "bulb";
+  if (wantBulb && !isBulb) {
+    anchorEl.innerHTML = ICONS.bulb;
+    anchorEl.dataset.showing = "bulb";
+  } else if (!wantBulb && isBulb) {
+    anchorEl.innerHTML = ICONS[anchorEl.dataset.modeIcon];
+    anchorEl.dataset.showing = "mode";
+  } else if (!anchorEl.dataset.showing) {
+    anchorEl.dataset.showing = wantBulb ? "bulb" : "mode";
+  }
+
+  // also: during hold, the SELECTED dot is now the new anchor → it should
+  // show the bulb (the light has resumed its single-tile state, lit by the
+  // new mode). swap that too.
+  if (time >= TL.hold.start) {
+    const selEl = dotEls[select];
+    if (selEl.dataset.showing !== "bulb") {
+      // remember its mode icon so we can restore on next loop
+      if (!selEl.dataset.modeIcon) selEl.dataset.modeIcon = geo.dots[select].icon;
+      selEl.innerHTML = ICONS.bulb;
+      selEl.dataset.showing = "bulb";
+    }
+  } else {
+    // restore selected's mode icon if we're not in hold
+    const selEl = dotEls[select];
+    if (selEl.dataset.modeIcon && selEl.dataset.showing === "bulb" && select !== anchor) {
+      selEl.innerHTML = ICONS[geo.dots[select].icon];
+      selEl.dataset.showing = "mode";
+    }
+  }
+
+  // phase-local progress
+  const tIdle   = ph(time, "idle");
+  const tPress  = ph(time, "press");
+  const tExpand = ph(time, "expand");
+  const tSelect = ph(time, "select");
+  const tCommit = ph(time, "commit");
+
+  // ── per-dot transform ──
+  dotEls.forEach((el, i) => {
+    const isAnchor = i === anchor;
+    const isSelect = i === select;
+    const target   = geo.dots[i];
+
+    // Idle phase: only the anchor is visible, gentle breathing
+    // Press phase:   anchor scales up slightly, others still hidden
+    // Expand phase:  others fly from (0,0) to target, S-curve + overshoot
+    //                anchor moves from (0,0) to its own target
+    // Select phase:  selected dot scales up, others dim slightly
+    // Commit phase:  others retract back to selected's position; selected
+    //                moves to (0,0) (i.e. becomes new anchor)
+    // Hold:          only selected visible at (0,0), at idle scale
+
+    let tx = 0, ty = 0, s = 1, o = 0;
+
+    if (time < TL.expand.start) {
+      // idle + press: anchor only
+      if (isAnchor) {
+        o = 1;
+        const breathe = 1 + 0.025 * Math.sin(time * Math.PI * 2 / 1.2);
+        s = breathe;
+        if (time >= TL.press.start) {
+          // press: scale up to 1.10 over the press duration
+          s = lerp(breathe, 1.12, easeOut(tPress));
+        }
+      } else {
+        o = 0;
+        s = 0.4;
+      }
+
+    } else if (time < TL.select.start) {
+      // expand: all dots fly out from (0,0) to their targets
+      const e = easeOut(tExpand);                        // for fade
+      const sCurve = backOut(easeInOut(tExpand), 1.4);   // for position
+      tx = target.x * sCurve;
+      ty = target.y * sCurve;
+      // siblings start invisible+small; anchor stays opaque
+      if (isAnchor) {
+        o = 1;
+        s = lerp(1.12, 1.0, easeOut(tExpand));
+      } else {
+        o = clamp(e * 1.4);
+        s = lerp(0.55, 1.0, easeOut(tExpand));
+      }
+
+    } else if (time < TL.commit.start) {
+      // select: dots stay at their expanded position; selected scales up
+      tx = target.x;
+      ty = target.y;
+      if (isSelect) {
+        o = 1;
+        s = lerp(1.0, 1.18, easeOut(tSelect));
+      } else {
+        o = lerp(1.0, 0.55, tSelect);
+        s = lerp(1.0, 0.92, tSelect);
+      }
+
+    } else if (time < TL.hold.start) {
+      // commit: non-selected retract toward selected's position;
+      // selected glides toward (0,0) and shrinks to anchor scale
+      const c = easeInOut(tCommit);
+      if (isSelect) {
+        // glide from target → (0,0)
+        tx = lerp(target.x, 0, c);
+        ty = lerp(target.y, 0, c);
+        s = lerp(1.18, 1.0, c);
+        o = 1;
+      } else {
+        // retract from target → selected's target → fade out
+        tx = lerp(target.x, geo.dots[select].x, c);
+        ty = lerp(target.y, geo.dots[select].y, c);
+        s = lerp(0.92, 0.4, c);
+        o = lerp(0.55, 0, c);
+      }
+
+    } else {
+      // hold: only selected visible at center
+      if (isSelect) {
+        const breathe = 1 + 0.025 * Math.sin(time * Math.PI * 2 / 1.2);
+        tx = 0; ty = 0; s = breathe; o = 1;
+      } else {
+        o = 0; s = 0.4;
+      }
+    }
+
+    el.style.setProperty("--tx", tx + "px");
+    el.style.setProperty("--ty", ty + "px");
+    el.style.setProperty("--s",  s.toFixed(3));
+    el.style.setProperty("--o",  o.toFixed(3));
+  });
+
+  // ── charging ring during press ──
+  let cs = 0.7, co = 0;
+  let csOuter = 0.7, coOuter = 0;
+  if (time >= TL.press.start && time < TL.expand.start) {
+    // grow + fade in, then snap as expansion starts
+    cs = lerp(0.7, 1.05, easeOut(tPress));
+    co = Math.sin(tPress * Math.PI) * 0.9; // peak at middle of press
+    csOuter = lerp(0.6, 1.15, easeOut(tPress));
+    coOuter = Math.sin(tPress * Math.PI) * 0.7;
+  } else if (time >= TL.expand.start && time < TL.expand.start + 0.15) {
+    // a quick burst as expansion begins (the "release" flash)
+    const f = (time - TL.expand.start) / 0.15;
+    cs = lerp(1.05, 1.6, f);
+    co = lerp(0.9, 0, f);
+    csOuter = lerp(1.15, 1.9, f);
+    coOuter = lerp(0.7, 0, f);
+  }
+  ringInner.style.setProperty("--cs", cs.toFixed(3));
+  ringInner.style.setProperty("--co", co.toFixed(3));
+  ringOuter.style.setProperty("--cs", csOuter.toFixed(3));
+  ringOuter.style.setProperty("--co", coOuter.toFixed(3));
+
+  // ── selection halo (under chosen dot) ──
+  let htx = 0, hty = 0, hs = 0.5, ho = 0;
+  if (time >= TL.select.start && time < TL.commit.start) {
+    htx = geo.dots[select].x;
+    hty = geo.dots[select].y;
+    hs = lerp(0.5, 1.4, easeOut(tSelect));
+    ho = Math.sin(tSelect * Math.PI) * 0.95;
+  } else if (time >= TL.commit.start && time < TL.hold.start) {
+    // halo follows selected dot toward center, fades
+    const c = easeInOut(tCommit);
+    htx = lerp(geo.dots[select].x, 0, c);
+    hty = lerp(geo.dots[select].y, 0, c);
+    hs = lerp(1.4, 0.9, c);
+    ho = lerp(0.95, 0, c);
+  }
+  halo.style.setProperty("--htx", htx + "px");
+  halo.style.setProperty("--hty", hty + "px");
+  halo.style.setProperty("--hs",  hs.toFixed(3));
+  halo.style.setProperty("--ho",  ho.toFixed(3));
+
+  // ── labels ──
+  // appear at expand, highlight selected during select+commit
+  let labelOpacity = 0;
+  if (time >= TL.expand.start) {
+    labelOpacity = clamp((time - TL.expand.start) / 0.4);
+  }
+  if (time >= TL.commit.start + 0.2) {
+    labelOpacity = lerp(1, 0, clamp((time - (TL.commit.start + 0.2)) / 0.5));
+  }
+  labels.querySelectorAll("span").forEach((sp) => {
+    const i = +sp.dataset.i;
+    sp.style.setProperty("--label-o", labelOpacity.toFixed(3));
+    sp.classList.toggle("on", i === select && time >= TL.select.start && time < TL.commit.start + 0.4);
+  });
+}
+
+/* ─────────────────────────────────────────────────────────────
+   PLAYBACK
+   ───────────────────────────────────────────────────────────── */
+let timeS = 0;     // seconds
+let playing = true;
+let speed = 1;
+let lastTs = null;
+
+const playBtn = document.getElementById("playBtn");
+const playIcon = document.getElementById("playIcon");
+const restartBtn = document.getElementById("restartBtn");
+const scrub = document.getElementById("scrub");
+const timeLabel = document.getElementById("timeLabel");
+const phaseLabel = document.getElementById("phaseLabel");
+
+const PLAY_SVG  = `<path d="M8 5v14l11-7z"/>`;
+const PAUSE_SVG = `<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>`;
+
+function render(time) {
+  for (const k in stages) frame(stages[k], time);
+
+  const phase = currentPhase(time);
+  const pct = time / TOTAL;
+  scrub.value = Math.round(pct * 1000);
+  scrub.style.setProperty("--p", pct);
+  timeLabel.textContent = time.toFixed(2) + "s · " + phase;
+  phaseLabel.textContent = "phase: " + phase;
+  document.querySelectorAll(".phase-row").forEach(row => {
+    row.querySelectorAll(".pf").forEach(pf => {
+      pf.classList.toggle("active", pf.dataset.pf === phase);
+    });
+  });
+}
+
+function tick(ts) {
+  if (lastTs == null) lastTs = ts;
+  const dt = (ts - lastTs) / 1000;
+  lastTs = ts;
+  if (playing) {
+    timeS += dt * speed;
+    if (timeS >= TOTAL) timeS = 0; // loop
+    render(timeS);
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+playBtn.addEventListener("click", () => {
+  playing = !playing;
+  playIcon.innerHTML = playing ? PLAY_SVG : PAUSE_SVG;
+  // reverse the icon meaning: when playing, button shows PAUSE
+  playIcon.innerHTML = playing ? PAUSE_SVG : PLAY_SVG;
+});
+// initial: playing → show pause icon
+playIcon.innerHTML = PAUSE_SVG;
+
+restartBtn.addEventListener("click", () => {
+  timeS = 0;
+  render(timeS);
+});
+
+scrub.addEventListener("input", (e) => {
+  playing = false;
+  playIcon.innerHTML = PLAY_SVG;
+  timeS = (+e.target.value / 1000) * TOTAL;
+  render(timeS);
+});
+
+document.getElementById("speedsCtrl").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  document.querySelectorAll("#speedsCtrl button").forEach(x => x.classList.remove("on"));
+  b.classList.add("on");
+  speed = +b.dataset.speed;
+});
+
+// keyboard: space = play/pause, R = restart
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space") { e.preventDefault(); playBtn.click(); }
+  if (e.code === "KeyR")  { restartBtn.click(); }
+});
+
+// first paint
+render(0);
+</script>
+</body>
+</html>

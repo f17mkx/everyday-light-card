@@ -1,0 +1,33 @@
+# Card 10 — All-house master (NEW P15.6-r31)
+#
+# Real-life: "I'm leaving the apartment" tile. One-tap toggles every light.
+# Long-press opens the topology popup so Stefan sees which rooms are still on.
+#
+# Entity: `light.all` — group of `light.main`, `light.kitchen`, `light.hall`,
+# `light.bathroom`. Standard HA `group:` integration handles the fan-out.
+#
+# Layout choice: compact-group with `full_length_sliders: true` so the
+# master-brightness slider has visual weight, plus the mindmap-arm renders
+# a mini topology preview (tap the arm-circle for a long-press to expand).
+#
+# Default-action vs long-press:
+#   - tap          → toggle entire group on/off (groupToggleWithRestore
+#                    snapshots last-state, so re-on restores per-room
+#                    brightness, not just the group's last brightness).
+#   - long-press   → mindmap topology popup with all 4 rooms.
+#   - drag-up/down → master-brightness slider.
+
+type: custom:everyday-light-card
+entity: light.all
+name: House
+icon: mdi:home-lightbulb
+group:
+  layout: compact
+  full_length_sliders: true
+  expansion_mode: inline  # tap the mindmap arm-circle expands inline (Stefan-default per R131)
+slider:
+  height: 260
+gestures:
+  group_icon:
+    long_press: expand_inline
+    double_tap: classic_more_info  # opens HA more-info dialog

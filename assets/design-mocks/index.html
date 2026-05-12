@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>everyday-light-card · Phase 1 Mocks</title>
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  body { padding: 56px 32px; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  header {
+    margin-bottom: 48px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding-bottom: 28px;
+  }
+  .eyebrow {
+    color: var(--orange);
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  h1 {
+    margin: 0 0 12px;
+    font-size: 36px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+  .lede {
+    color: var(--text-dim);
+    font-size: 15px;
+    max-width: 720px;
+    line-height: 1.55;
+  }
+  .lede code {
+    color: var(--orange);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 22px;
+  }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 22px 22px 20px;
+    box-shadow: var(--shadow);
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border: 1px solid rgba(255,255,255,0.04);
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+  .card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(248,141,42,0.4);
+  }
+  .card .num {
+    color: var(--orange);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+  }
+  .card h2 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+  }
+  .card p {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .card .meta {
+    margin-top: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text-faint);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+  }
+  .card .file {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .card.svg .file { color: var(--orange); }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 22px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    color: var(--text-faint);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  footer code { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="wrap" data-screen-label="Phase 1 Mocks Index">
+  <header>
+    <div class="eyebrow">everyday-light-card · phase 1</div>
+    <h1>Design Mocks</h1>
+    <p class="lede">
+      Acht statische Mocks gemäß <code>CLAUDE-DESIGN-PROMPTS.md</code>. Brand-Tokens aus Repo:
+      vertikale Pill-Slider (dunkler Ghost-Track, Fill <code>#f88d2a</code>, weißer Thumb), Tile-Cards mit flachen
+      Kreisen, dunkles Navy <code>#1f1f2e</code>. Icons als saubere geometrische Platzhalter (kein MDI-Import).
+    </p>
+  </header>
+
+  <div class="grid">
+    <a class="card" href="group-layout-expanded-n3.html">
+      <div class="num">Mock 1</div>
+      <h2>Group-Layout (Expanded), 3-Member Hall</h2>
+      <p>3 vertikale Slider + Member-Tiles + Triton-Mindmap konvergiert auf Group-Tile.</p>
+      <div class="meta"><span class="file">group-layout-expanded-n3.html</span><span>R2</span></div>
+    </a>
+
+    <a class="card" href="mindmap-geometries-n2-n8.html">
+      <div class="num">Mock 2</div>
+      <h2>Mindmap-Geometrien N=2..8</h2>
+      <p>4×2-Grid mit allen N-Varianten zur visuellen Bewertung der „wirr"-Schwelle.</p>
+      <div class="meta"><span class="file">mindmap-geometries-n2-n8.html</span><span>R2 / Risk Eng-3</span></div>
+    </a>
+
+    <a class="card" href="mode-picker-inplace.html">
+      <div class="num">Mock 3</div>
+      <h2>Mode-Picker In-Place Expansion</h2>
+      <p>4 Sequenz-Zustände: default → long-press → 3-Kreis-Picker → Selection.</p>
+      <div class="meta"><span class="file">mode-picker-inplace.html</span><span>R4</span></div>
+    </a>
+
+    <a class="card" href="mode-picker-inplace-animated.html">
+      <div class="num">Mock 3 · animated</div>
+      <h2>Mode-Picker · Animation</h2>
+      <p>Sequenz-Animation: idle → long-press → expand → select → commit. 2/3/4-mode synchron, mit Scrubber.</p>
+      <div class="meta"><span class="file">mode-picker-inplace-animated.html</span><span>R4 · motion</span></div>
+    </a>
+
+    <a class="card" href="saved-colors-edit-mode.html">
+      <div class="num">Mock 4</div>
+      <h2>Saved-Colors Picker + Edit-Mode</h2>
+      <p>View → Edit (Wiggle + −) → After + (9. Swatch hinzugefügt). Backdrop-Blur Pop-Cards.</p>
+      <div class="meta"><span class="file">saved-colors-edit-mode.html</span><span>R6 + R7</span></div>
+    </a>
+
+    <a class="card" href="classic-mode-popup.html">
+      <div class="num">Mock 5</div>
+      <h2>Classic-Mode Pop-Up</h2>
+      <p>HA more-info Dialog: Slider + Temp + Wheel + Presets + Effects über blurred Dashboard.</p>
+      <div class="meta"><span class="file">classic-mode-popup.html</span><span>R-v5-4</span></div>
+    </a>
+
+    <a class="card svg" href="favourite-7-dot.svg">
+      <div class="num">Mock 6</div>
+      <h2>7-Dot Hexagon Icon</h2>
+      <p>Standalone 24×24 SVG · 1 Center + 6 Hex-Dots · <code>currentColor</code>.</p>
+      <div class="meta"><span class="file">favourite-7-dot.svg</span><span>R9</span></div>
+    </a>
+
+    <a class="card" href="color-wheel-stepped-vs-smooth.html">
+      <div class="num">Mock 7</div>
+      <h2>Color-Wheel: Stepped vs Smooth</h2>
+      <p>Side-by-side: kontinuierliches HSV-Disk vs. 12 × 4 Cell-Grid mit Snap-Marker.</p>
+      <div class="meta"><span class="file">color-wheel-stepped-vs-smooth.html</span><span>R5 · A6</span></div>
+    </a>
+
+    <a class="card" href="compact-with-group-expansion.html">
+      <div class="num">Mock 8</div>
+      <h2>Compact + In-Place Group-Expansion</h2>
+      <p>3 Zustände: compact → long-press glow → fan-out mit Shimmer + smooth S-curve.</p>
+      <div class="meta"><span class="file">compact-with-group-expansion.html</span><span>R10</span></div>
+    </a>
+
+    <a class="card" href="saved-colors-layouts-1-21.html">
+      <div class="num">Mock 9</div>
+      <h2>Saved-Colors Layouts N=1..21</h2>
+      <p>Hex-Pattern · Dreieck (3) · 7-Dot-Hex (7) · Flower-of-Life (19). Ghost-Slot zeigt next.</p>
+      <div class="meta"><span class="file">saved-colors-layouts-1-21.html</span><span>R6/R7 · neu</span></div>
+    </a>
+  </div>
+
+  <footer>
+    <span>Stefan-Review-Output: <code>PHASE-1-COMMENTS.md</code> (✓ approved · ⚠ revise · ✗ reject)</span>
+    <span>spec-locked 2026-05-07</span>
+  </footer>
+</div>
+</body>
+</html>

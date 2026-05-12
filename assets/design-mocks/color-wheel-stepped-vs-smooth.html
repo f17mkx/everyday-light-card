@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>color-wheel-stepped-vs-smooth</title>
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  body { padding: 36px 24px 60px; }
+  .wrap { max-width: 1320px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 24px; }
+  h1 { margin: 0; font-size: 22px; font-weight: 400; }
+  .lede { color: var(--text-dim); font-size: 13px; margin-top: 8px; }
+  .section-title {
+    color: var(--text-dim); font-size: 11px; letter-spacing: 0.18em;
+    text-transform: uppercase; margin: 28px 0 10px;
+  }
+  .row {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 1100px) { .row { grid-template-columns: repeat(2, 1fr); } }
+  .panel {
+    background: var(--card); border-radius: 16px;
+    padding: 14px 12px 12px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .panel h3 {
+    margin: 0; font-size: 11px; font-weight: 500;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim);
+  }
+  .panel .sub { margin: 3px 0 10px; font-size: 10px; color: var(--text-faint); }
+  .wheel-wrap { position: relative; width: 180px; height: 180px; }
+  .smooth {
+    width: 100%; height: 100%; border-radius: 50%;
+    background:
+      radial-gradient(circle at center, #fff 0%, rgba(255,255,255,0) 70%),
+      conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+  }
+  .annot {
+    margin-top: 22px; color: var(--text-faint); font-size: 11px; text-align: center;
+  }
+  .annot code { color: var(--orange); font-family: ui-monospace, monospace; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="wrap" data-screen-label="Mock 7 — Color Wheel">
+  <header>
+    <h1>Color-Wheel Variants</h1>
+    <p class="lede">Smooth · Stepped (no border) — Hue-Segments × Saturation-Rings · weißer Center bei x6/7/8</p>
+  </header>
+
+  <div class="section-title">Smooth (Reference)</div>
+  <div class="row">
+    <div class="panel">
+      <h3>Smooth</h3>
+      <div class="sub">continuous HSV</div>
+      <div class="wheel-wrap"><div class="smooth"></div></div>
+    </div>
+  </div>
+
+  <div class="section-title">24 hues</div>
+  <div class="row">
+    <div class="panel"><h3>24 × 5</h3><div class="sub">no white center</div><div class="wheel-wrap"><svg class="stepped" data-h="24" data-r="5" data-white="0" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"><h3>24 × 6</h3><div class="sub">white center</div><div class="wheel-wrap"><svg class="stepped" data-h="24" data-r="6" data-white="1" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"><h3>24 × 7</h3><div class="sub">white center</div><div class="wheel-wrap"><svg class="stepped" data-h="24" data-r="7" data-white="1" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"><h3>24 × 8</h3><div class="sub">white center</div><div class="wheel-wrap"><svg class="stepped" data-h="24" data-r="8" data-white="1" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"></div>
+  </div>
+
+  <div class="section-title">23 hues</div>
+  <div class="row">
+    <div class="panel"><h3>23 × 5</h3><div class="sub">no white center</div><div class="wheel-wrap"><svg class="stepped" data-h="23" data-r="5" data-white="0" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"><h3>23 × 6</h3><div class="sub">white center</div><div class="wheel-wrap"><svg class="stepped" data-h="23" data-r="6" data-white="1" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"><h3>23 × 7</h3><div class="sub">white center</div><div class="wheel-wrap"><svg class="stepped" data-h="23" data-r="7" data-white="1" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"><h3>23 × 8</h3><div class="sub">white center</div><div class="wheel-wrap"><svg class="stepped" data-h="23" data-r="8" data-white="1" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"></div>
+  </div>
+
+  <div class="section-title">22 hues</div>
+  <div class="row">
+    <div class="panel"><h3>22 × 5</h3><div class="sub">no white center</div><div class="wheel-wrap"><svg class="stepped" data-h="22" data-r="5" data-white="0" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"><h3>22 × 6</h3><div class="sub">white center</div><div class="wheel-wrap"><svg class="stepped" data-h="22" data-r="6" data-white="1" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"><h3>22 × 7</h3><div class="sub">white center</div><div class="wheel-wrap"><svg class="stepped" data-h="22" data-r="7" data-white="1" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"><h3>22 × 8</h3><div class="sub">white center</div><div class="wheel-wrap"><svg class="stepped" data-h="22" data-r="8" data-white="1" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"></div>
+  </div>
+
+  <div class="section-title">21 hues</div>
+  <div class="row">
+    <div class="panel"><h3>21 × 5</h3><div class="sub">no white center</div><div class="wheel-wrap"><svg class="stepped" data-h="21" data-r="5" data-white="0" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"><h3>21 × 6</h3><div class="sub">white center</div><div class="wheel-wrap"><svg class="stepped" data-h="21" data-r="6" data-white="1" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"><h3>21 × 7</h3><div class="sub">white center</div><div class="wheel-wrap"><svg class="stepped" data-h="21" data-r="7" data-white="1" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"><h3>21 × 8</h3><div class="sub">white center</div><div class="wheel-wrap"><svg class="stepped" data-h="21" data-r="8" data-white="1" viewBox="-110 -110 220 220"></svg></div></div>
+    <div class="panel"></div>
+  </div>
+
+  <div class="annot">
+    <strong style="color:var(--text-dim)">A6:</strong>
+    <code>hue_segments</code> ∈ {21,22,23,24} · <code>saturation_rings</code> ∈ {5,6,7,8} · <code>white_center</code> auto bei rings ≥ 6
+  </div>
+</div>
+
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const RMAX = 100;
+function hsvToRgb(h, s, v) {
+  const i = Math.floor(h * 6), f = h * 6 - i;
+  const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+  let r, g, b;
+  switch (i % 6) {
+    case 0: r=v; g=t; b=p; break; case 1: r=q; g=v; b=p; break;
+    case 2: r=p; g=v; b=t; break; case 3: r=p; g=q; b=v; break;
+    case 4: r=t; g=p; b=v; break; case 5: r=v; g=p; b=q; break;
+  }
+  return `rgb(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)})`;
+}
+function arcPath(r1, r2, a1, a2) {
+  const x1 = Math.cos(a1)*r1, y1 = Math.sin(a1)*r1;
+  const x2 = Math.cos(a2)*r1, y2 = Math.sin(a2)*r1;
+  const x3 = Math.cos(a2)*r2, y3 = Math.sin(a2)*r2;
+  const x4 = Math.cos(a1)*r2, y4 = Math.sin(a1)*r2;
+  const large = (a2 - a1) > Math.PI ? 1 : 0;
+  return `M ${x1} ${y1} A ${r1} ${r1} 0 ${large} 1 ${x2} ${y2} L ${x3} ${y3} A ${r2} ${r2} 0 ${large} 0 ${x4} ${y4} Z`;
+}
+function buildStepped(svg) {
+  const HUES = +svg.dataset.h;
+  const RINGS = +svg.dataset.r;
+  const whiteCenter = svg.dataset.white === "1";
+  const TWO_PI = Math.PI * 2;
+  const startRing = whiteCenter ? 1 : 0;
+  for (let ring = startRing; ring < RINGS; ring++) {
+    const r1 = (RMAX / RINGS) * ring;
+    const r2 = (RMAX / RINGS) * (ring + 1);
+    // saturation: outer ring = 1.0, inner rings = lower saturation
+    const sat = (ring + 1) / RINGS;
+    for (let h = 0; h < HUES; h++) {
+      const a1 = (h / HUES) * TWO_PI - Math.PI / 2;
+      const a2 = ((h + 1) / HUES) * TWO_PI - Math.PI / 2;
+      const fill = hsvToRgb(h / HUES, sat, 1);
+      const path = document.createElementNS(NS, "path");
+      path.setAttribute("d", arcPath(r1, r2, a1, a2));
+      path.setAttribute("fill", fill);
+      svg.appendChild(path);
+    }
+  }
+  if (whiteCenter) {
+    const c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", 0); c.setAttribute("cy", 0);
+    c.setAttribute("r", RMAX / RINGS);
+    c.setAttribute("fill", "#ffffff");
+    svg.appendChild(c);
+  }
+}
+document.querySelectorAll("svg.stepped").forEach(buildStepped);
+</script>
+</body>
+</html>

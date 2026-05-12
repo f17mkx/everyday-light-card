@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>saved-colors-layouts-1-19</title>
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  body { padding: 32px 16px 80px; }
+  header {
+    text-align: center; max-width: 900px; margin: 0 auto 22px;
+  }
+  h1 { font-size: 22px; font-weight: 400; margin: 0; }
+  .lede { color: var(--text-dim); font-size: 13px; margin-top: 8px; }
+  .grid {
+    max-width: 1280px; margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+  }
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 720px)  { .grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .panel {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 14px 12px 14px;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .panel.featured { grid-column: span 2; }
+  .panel h3 {
+    margin: 0; font-size: 11px; font-weight: 500;
+    letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-dim);
+  }
+  .panel .sub {
+    margin: 3px 0 12px;
+    font-size: 10px; color: var(--text-faint); letter-spacing: 0.04em;
+  }
+  .stage {
+    position: relative;
+    width: 240px; height: 200px;
+  }
+  .stage.lg { width: 280px; height: 240px; }
+  .swatch {
+    position: absolute;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.18);
+    transform: translate(-50%, -50%);
+  }
+  .swatch.ghost {
+    background: transparent;
+    border: 1.5px dashed rgba(255,255,255,0.34);
+    color: rgba(255,255,255,0.46);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 300; line-height: 1;
+  }
+  .annot {
+    margin-top: 30px; max-width: 860px; margin-inline: auto;
+    color: var(--text-faint); font-size: 11px;
+    line-height: 1.6; text-align: center;
+  }
+  .annot strong { color: var(--text-dim); }
+
+  /* Animation row */
+  .anim-row {
+    max-width: 1280px; margin: 36px auto 0;
+    background: var(--card);
+    border-radius: 18px;
+    padding: 22px;
+  }
+  .anim-row h2 {
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--text-dim); margin: 0 0 14px;
+  }
+  .anim-stage {
+    width: 240px; height: 200px;
+    position: relative; margin: 0 auto;
+  }
+  .anim-controls {
+    display: flex; gap: 8px; justify-content: center; margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .anim-controls button {
+    padding: 8px 14px; border-radius: 999px;
+    background: var(--tile); color: var(--text);
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 12px; cursor: pointer;
+    font-family: inherit;
+  }
+  .anim-controls button:hover { background: var(--tile-2); }
+  .anim-controls button.on {
+    background: var(--orange); color: #000; border-color: transparent;
+  }
+  .swatch.animated {
+    transition: left 420ms cubic-bezier(.5,1.4,.5,1), top 420ms cubic-bezier(.5,1.4,.5,1), opacity 240ms ease;
+  }
+  .anim-caption {
+    text-align: center; color: var(--text-faint);
+    font-size: 11px; margin-top: 12px;
+    letter-spacing: 0.04em;
+  }
+</style>
+</head>
+<body>
+<div data-screen-label="Mock 9 — Saved Colors Layouts (N=1..19)">
+  <header>
+    <h1>Saved-Colors Layouts</h1>
+    <p class="lede">Max <strong style="color:var(--text-dim)">N=19</strong> · Ghost-Pille = Vorschau auf nächstes Layout · 1 Ansicht pro N</p>
+  </header>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="annot">
+    <strong>Logik:</strong> Im Edit-Mode taucht 1 Ghost-Pille an der Position auf, die das nächste Layout (N+1) erfordert.
+    Tap → Ghost wird zum echten Slot, alle anderen rücken bei Bedarf nach. Bei N=19 keine Ghost mehr (Limit erreicht).<br>
+    <strong>Cluster:</strong> N=8..19 nutzen Apple-Watch-Cluster (organisch dicht, Drag-and-Drop, andere Kreise weichen aus).
+  </div>
+
+  <!-- Edit-mode add animation demo -->
+  <div class="anim-row" data-screen-label="Mock 9 — Add Animation Demo">
+    <h2>Add-Animation · long-press → Ghost erscheint, andere rücken</h2>
+    <div class="anim-stage" id="anim-stage"></div>
+    <div class="anim-controls">
+      <button class="on" data-step="1">N=1</button>
+      <button data-step="2">N=2</button>
+      <button data-step="3">N=3</button>
+      <button data-step="4">N=4</button>
+      <button data-step="5">N=5</button>
+      <button data-step="6">N=6</button>
+      <button data-step="7">N=7</button>
+      <button data-step="8">N=8</button>
+      <button data-step="9">N=9</button>
+      <button data-step="10">N=10</button>
+      <button data-play>▶ play 1→10</button>
+    </div>
+    <div class="anim-caption">tap a step or play — bestehende Pillen rücken aus, Ghost (gestrichelt) zeigt next slot</div>
+  </div>
+</div>
+
+<script>
+// ─── Layouts ────────────────────────────────────────────────────────────
+// Each layout returns positions in a 240×200 stage (CX=120, CY=100).
+// All N ≤ 19 must be unique, monotonically growing (each contains prev as a
+// subset where reasonable, so the add-animation lands cleanly).
+
+const CX = 120, CY = 100;
+const R36 = 18; // swatch radius
+const SP   = 38; // approximate centre-to-centre spacing for cluster
+
+// hex offsets for honeycomb (flat-topped). offset = (col, row)
+function hexAt(col, row) {
+  const dx = SP * Math.cos(Math.PI / 6); // ~32.9
+  const dy = SP * 0.75;                  // ~28.5
+  // use pointy-topped with row offset
+  const x = CX + col * dx + (row & 1 ? dx/2 : 0);
+  const y = CY + row * dy;
+  return { x, y };
+}
+// helper for polar
+function polar(r, deg) {
+  const a = (deg - 90) * Math.PI / 180;
+  return { x: CX + r * Math.cos(a), y: CY + r * Math.sin(a) };
+}
+
+// HEX6 around center (radius matches honeycomb spacing)
+const HEX_R = SP;
+const HEX6 = [0, 60, 120, 180, 240, 300].map(d => polar(HEX_R, d));
+
+// Apple-Watch-style cluster: hexagonal packing, snake-fill from center outward
+// We hand-curate positions to look organic and roughly circular.
+// Each entry is a hex-cell (col, row) relative to center cell (0,0).
+const CLUSTER_CELLS = [
+  [0, 0],            // 1: center
+  // ring 1 — 6 around center
+  [-1, -1], [0, -1], [1, 0], [1, 1], [0, 1], [-1, 0],
+  // ring 2 — 12 outer
+  [0, -2], [1, -1], [2, 0], [2, 1], [1, 2], [0, 2],
+  [-1, 2], [-2, 1], [-2, 0], [-2, -1], [-1, -2],
+];
+// total cells = 1 + 6 + 11 = 18 ... need 19. add one more on outer ring
+CLUSTER_CELLS.push([1, -2]);
+
+function clusterPos(i) {
+  const [col, row] = CLUSTER_CELLS[i];
+  return hexAt(col, row);
+}
+
+// Layout dispatch by N
+function layoutFor(n) {
+  if (n <= 0) return [];
+  if (n === 1) return [{ x: CX, y: CY }];
+  if (n === 2) {
+    // horizontal pair
+    return [
+      { x: CX - SP/2, y: CY },
+      { x: CX + SP/2, y: CY },
+    ];
+  }
+  if (n === 3) {
+    // triangle (apex up)
+    return [
+      polar(SP * 0.6, 0),
+      polar(SP * 0.6, 120),
+      polar(SP * 0.6, 240),
+    ];
+  }
+  if (n === 4) {
+    // triangle + center
+    return [
+      { x: CX, y: CY },
+      polar(SP * 0.85, 0),
+      polar(SP * 0.85, 120),
+      polar(SP * 0.85, 240),
+    ];
+  }
+  if (n === 5) {
+    // hex without 1 — open ring (5 around invisible center)
+    return [0, 72, 144, 216, 288].map(d => polar(SP, d));
+  }
+  if (n === 6) {
+    // hex 6 around center (no center)
+    return HEX6.slice();
+  }
+  if (n === 7) {
+    // 7-dot hex (1 + 6)
+    return [{ x: CX, y: CY }, ...HEX6];
+  }
+  // N=8..19 → Apple-Watch cluster
+  return Array.from({ length: n }, (_, i) => clusterPos(i));
+}
+
+// next-layout ghost: pick the new position(s) that next layout adds
+// For our purpose: find a single position from layoutFor(n+1) that is
+// "new" relative to layoutFor(n).
+function ghostPosFor(n) {
+  if (n >= 19) return null;
+  const cur = layoutFor(n);
+  const next = layoutFor(n + 1);
+  // find position in next that has no near match in cur
+  for (const p of next) {
+    const found = cur.some(q =>
+      Math.hypot(p.x - q.x, p.y - q.y) < SP * 0.4
+    );
+    if (!found) return p;
+  }
+  // fallback: last entry
+  return next[next.length - 1];
+}
+
+// ─── Render grid ────────────────────────────────────────────────────────
+const PALETTE = [
+  "#f47a00","#f8b27e","#fae8d2","#7e9ef8","#b27ef8",
+  "#f87ed8","#f87a6e","#4ad8c1","#ffd96b","#69d889",
+  "#5ec0f2","#a07ef8","#f8a2c5","#f87a4a","#cfe2a4",
+  "#f8e07e","#7ef8d8","#d97ef8","#f87a98","#ffffff"
+];
+
+function renderPanel(n, opts = {}) {
+  const featured = opts.featured;
+  const stage = document.createElement("div");
+  stage.className = "stage" + (featured ? " lg" : "");
+  const positions = layoutFor(n);
+  positions.forEach((p, i) => {
+    const s = document.createElement("div");
+    s.className = "swatch";
+    s.style.left = p.x + "px";
+    s.style.top  = p.y + "px";
+    s.style.background = PALETTE[i % PALETTE.length];
+    stage.appendChild(s);
+  });
+  // ghost = next-N position
+  const g = ghostPosFor(n);
+  if (g) {
+    const ge = document.createElement("div");
+    ge.className = "swatch ghost";
+    ge.style.left = g.x + "px";
+    ge.style.top  = g.y + "px";
+    ge.textContent = "+";
+    stage.appendChild(ge);
+  }
+  const panel = document.createElement("div");
+  panel.className = "panel" + (featured ? " featured" : "");
+  panel.innerHTML = `<h3>N = ${n}</h3><div class="sub">${describe(n)}</div>`;
+  panel.appendChild(stage);
+  return panel;
+}
+
+function describe(n) {
+  if (n === 1)  return "single · ghost = pair";
+  if (n === 2)  return "horizontal · ghost = triangle";
+  if (n === 3)  return "triangle · ghost = +center";
+  if (n === 4)  return "triangle + center · ghost = ring-5";
+  if (n === 5)  return "open ring · ghost = +center";
+  if (n === 6)  return "hex ring · ghost = +center";
+  if (n === 7)  return "7-dot hex · ghost = cluster";
+  if (n === 19) return "max · cluster · no ghost";
+  return "Apple-Watch cluster";
+}
+
+const grid = document.getElementById("grid");
+for (let n = 1; n <= 19; n++) {
+  grid.appendChild(renderPanel(n));
+}
+
+// ─── Animated demo ──────────────────────────────────────────────────────
+const animStage = document.getElementById("anim-stage");
+const animControls = document.querySelectorAll(".anim-controls button[data-step]");
+const playBtn = document.querySelector(".anim-controls button[data-play]");
+let currentN = 1;
+
+// Build a pool of swatches keyed by id so they can move smoothly between layouts
+const SWATCH_POOL = [];
+function ensurePool(size) {
+  while (SWATCH_POOL.length < size) {
+    const e = document.createElement("div");
+    e.className = "swatch animated";
+    e.style.background = PALETTE[SWATCH_POOL.length % PALETTE.length];
+    e.style.opacity = "0";
+    animStage.appendChild(e);
+    SWATCH_POOL.push(e);
+  }
+}
+let ghostEl = null;
+function ensureGhost() {
+  if (!ghostEl) {
+    ghostEl = document.createElement("div");
+    ghostEl.className = "swatch ghost animated";
+    ghostEl.textContent = "+";
+    ghostEl.style.opacity = "0";
+    animStage.appendChild(ghostEl);
+  }
+}
+
+function renderAnim(n) {
+  ensurePool(19);
+  ensureGhost();
+  const positions = layoutFor(n);
+  SWATCH_POOL.forEach((el, i) => {
+    if (i < positions.length) {
+      const p = positions[i];
+      el.style.left = p.x + "px";
+      el.style.top  = p.y + "px";
+      el.style.opacity = "1";
+    } else {
+      el.style.opacity = "0";
+    }
+  });
+  const g = ghostPosFor(n);
+  if (g) {
+    ghostEl.style.left = g.x + "px";
+    ghostEl.style.top  = g.y + "px";
+    ghostEl.style.opacity = "1";
+  } else {
+    ghostEl.style.opacity = "0";
+  }
+  currentN = n;
+  animControls.forEach(b => b.classList.toggle("on", +b.dataset.step === n));
+}
+
+animControls.forEach(b => {
+  b.addEventListener("click", () => renderAnim(+b.dataset.step));
+});
+
+let playing = false;
+playBtn.addEventListener("click", async () => {
+  if (playing) return;
+  playing = true;
+  playBtn.textContent = "▶ playing…";
+  for (let n = 1; n <= 10; n++) {
+    renderAnim(n);
+    await new Promise(r => setTimeout(r, 700));
+  }
+  playing = false;
+  playBtn.textContent = "▶ play 1→10";
+});
+
+renderAnim(1);
+</script>
+</body>
+</html>

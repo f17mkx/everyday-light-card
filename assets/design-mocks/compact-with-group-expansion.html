@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>compact-with-group-expansion</title>
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  body { padding: 36px 24px; }
+  .wrap { max-width: 1200px; margin: 0 auto; }
+
+  /* slider sized to match classic-mode-popup tweak values
+     sliderWidth: 47, thumbScale: 0.78 → thumb ≈ 37px.
+     Override .sp-slider.sm so all sliders in this mock pick up the new look. */
+  :root {
+    --slider-w: 47px;
+    --thumb-w: 37px;
+  }
+  .wrap .sp-slider.sm {
+    width: var(--slider-w);
+    height: 170px;
+    border-radius: calc(var(--slider-w) / 2);
+    transition: height 420ms cubic-bezier(.5,1.4,.5,1);
+  }
+  /* compact-mode default: single slider runs the full card length.
+     When the card expands, the 3 child sliders fall back to the standard 170px. */
+  .wrap .sp-slider.sm.tall {
+    height: 260px;
+  }
+  .wrap .sp-slider.sm .sp-fill {
+    border-radius: calc(var(--slider-w) / 2);
+  }
+  .wrap .sp-slider.sm .sp-thumb {
+    left: calc((var(--slider-w) - var(--thumb-w)) / 2);
+    width: var(--thumb-w);
+    height: var(--thumb-w);
+    bottom: clamp(
+      calc((var(--slider-w) - var(--thumb-w)) / 2),
+      calc((100% * var(--pct, 0) / 100) - var(--thumb-w) - calc((var(--slider-w) - var(--thumb-w)) / 2)),
+      calc(100% - var(--thumb-w) - calc((var(--slider-w) - var(--thumb-w)) / 2))
+    );
+  }
+
+  /* static three-state row */
+  .row {
+    display: grid;
+    grid-template-columns: auto auto auto auto auto;
+    gap: 6px;
+    align-items: end;
+    justify-content: center;
+    margin-bottom: 36px;
+  }
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .title { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 8px; }
+
+  .card {
+    background: var(--card);
+    border-radius: 18px;
+    padding: 22px 18px 18px;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; align-items: center;
+    position: relative;
+    transition: width 420ms cubic-bezier(.5,1.4,.5,1), padding 420ms ease;
+  }
+  .card.compact  { width: 100px; }
+  .card.expanded { width: 280px; }
+  .arrow { color: var(--text-faint); font-size: 22px; align-self: center; margin-bottom: 60px; padding: 0 8px; }
+
+  /* sliders + members + group, animated layout */
+  .anim-area {
+    position: relative;
+    width: 100%;
+    height: 340px;
+  }
+  .a-slider {
+    position: absolute;
+    transition: left 420ms cubic-bezier(.5,1.4,.5,1), top 420ms ease, opacity 280ms ease;
+  }
+  .a-member {
+    position: absolute;
+    width: 36px;
+    transition: left 480ms cubic-bezier(.5,1.4,.5,1), top 480ms cubic-bezier(.5,1.4,.5,1), opacity 320ms ease;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    color: var(--orange);
+  }
+  .a-member .ic { width: 36px; height: 36px; border-radius: 50%; background: var(--tile); display: flex; align-items: center; justify-content: center; }
+  .a-member .ic svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .a-member .lbl { color: var(--text-faint); font-size: 9px; }
+  .a-group {
+    position: absolute;
+    transition: left 420ms cubic-bezier(.5,1.4,.5,1), top 420ms ease;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .a-group .ic {
+    width: 60px; height: 60px; border-radius: 50%;
+    background: var(--tile);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--orange);
+    position: relative;
+  }
+  .a-group.glow .ic {
+    box-shadow: 0 0 0 3px rgba(248,141,42,0.22), 0 0 22px rgba(248,141,42,0.45);
+  }
+  .a-group.glow .ic::after {
+    content: ""; position: absolute; inset: -8px;
+    border-radius: 50%;
+    border: 2px solid rgba(248,141,42,0.45);
+    animation: pulse 1.4s ease-out infinite;
+    pointer-events: none;
+  }
+  @keyframes pulse { 0%{transform:scale(0.92);opacity:0.8} 100%{transform:scale(1.18);opacity:0} }
+  .a-group .ic svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .a-group .lbl { color: var(--text-dim); font-size: 11px; }
+
+  .a-mindmap {
+    position: absolute;
+    transition: opacity 320ms ease;
+    pointer-events: none;
+  }
+
+  /* animation panel */
+  .anim-panel {
+    background: var(--card);
+    border-radius: 22px;
+    padding: 22px;
+    box-shadow: var(--shadow);
+    margin-top: 24px;
+  }
+  .anim-panel h2 {
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--text-dim); margin: 0 0 18px; text-align: center;
+  }
+  .anim-host {
+    display: flex; justify-content: center; min-height: 380px;
+    align-items: flex-start;
+  }
+  .controls {
+    display: flex; gap: 8px; justify-content: center; margin-top: 16px;
+  }
+  .controls button {
+    padding: 8px 14px; border-radius: 999px;
+    background: var(--tile); color: var(--text);
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 12px; cursor: pointer;
+    font-family: inherit;
+  }
+  .controls button.on { background: var(--orange); color: #000; border-color: transparent; }
+  .controls button:hover:not(.on) { background: var(--tile-2); }
+  .caption { margin-top: 18px; text-align: center; color: var(--text-faint); font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="wrap" data-screen-label="Mock 8 — Compact + Group Expansion">
+
+  <!-- ── Static reference row ── -->
+  <div class="row">
+    <div class="stage">
+      <div class="title">1 · compact</div>
+      <div class="card compact">
+        <div class="sp-slider sm tall" style="margin-bottom:14px"><div class="sp-fill" style="height:60%"></div><div class="sp-thumb" style="--pct:60">60</div></div>
+        <div class="a-group" style="position:relative">
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 4h14"/><path d="M7 4l-1 6h12l-1-6"/><path d="M6 10h12a4 4 0 0 1-12 0z" fill="currentColor" fill-opacity="0.18"/></svg></div>
+          <div class="lbl">Hall</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="title">2 · long-press</div>
+      <div class="card compact">
+        <div class="sp-slider sm tall" style="margin-bottom:14px"><div class="sp-fill" style="height:60%"></div><div class="sp-thumb" style="--pct:60">60</div></div>
+        <div class="a-group glow" style="position:relative">
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 4h14"/><path d="M7 4l-1 6h12l-1-6"/><path d="M6 10h12a4 4 0 0 1-12 0z" fill="currentColor" fill-opacity="0.18"/></svg></div>
+          <div class="lbl">Hall</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="title">3 · expanded inline</div>
+      <div class="card expanded">
+        <!-- 3 sliders, evenly spaced. slider 47 + gap 14 → centers at ±61 from middle.
+             Card content width 244px → centers land at 61/122/183. -->
+        <div style="display:flex; gap:14px; margin-bottom:10px; justify-content:center">
+          <div class="sp-slider sm"><div class="sp-fill" style="height:55%"></div><div class="sp-thumb" style="--pct:55">55</div></div>
+          <div class="sp-slider sm"><div class="sp-fill" style="height:60%"></div><div class="sp-thumb" style="--pct:60">60</div></div>
+          <div class="sp-slider sm"><div class="sp-fill" style="height:65%"></div><div class="sp-thumb" style="--pct:65">65</div></div>
+        </div>
+        <!-- L1-L3 icons sit directly under the sliders, aligned with slider centers. -->
+        <div style="display:flex; gap:14px; justify-content:center">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--orange); width:47px">
+            <div style="width:36px; height:36px; border-radius:50%; background:var(--tile); display:flex; align-items:center; justify-content:center"><svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.6 1 2.5h6c0-.9.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg></div>
+            <div style="color:var(--text-faint); font-size:10px">L1</div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--orange); width:47px">
+            <div style="width:36px; height:36px; border-radius:50%; background:var(--tile); display:flex; align-items:center; justify-content:center"><svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.6 1 2.5h6c0-.9.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg></div>
+            <div style="color:var(--text-faint); font-size:10px">L2</div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--orange); width:47px">
+            <div style="width:36px; height:36px; border-radius:50%; background:var(--tile); display:flex; align-items:center; justify-content:center"><svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.6 1 2.5h6c0-.9.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg></div>
+            <div style="color:var(--text-faint); font-size:10px">L3</div>
+          </div>
+        </div>
+        <!-- mindmap funnels FROM the L1-L3 icons (top) DOWN to the group lamp (bottom).
+             L1-L3 centers at viewBox-x 66.9 / 120 / 173.1 (matching slider/icon centers above);
+             group lamp at viewBox-x 120, bottom. -->
+        <svg viewBox="0 0 240 40" preserveAspectRatio="none" style="width:100%; height:40px; overflow:visible; margin-top:6px">
+          <g stroke="#f4b91d" stroke-width="2.6" fill="none" stroke-linecap="round" opacity="0.92">
+            <path d="M 66.9 4 C 64.12 15.2, 100.9 24.8, 120 36"/>
+            <path d="M 120 4 C 120 15.2, 120 24.8, 120 36"/>
+            <path d="M 173.1 4 C 175.88 15.2, 139.1 24.8, 120 36"/>
+          </g>
+        </svg>
+        <!-- group lamp now sits at the BOTTOM, where the mindmap converges. -->
+        <div class="a-group" style="position:relative; margin-top:4px">
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 4h14"/><path d="M7 4l-1 6h12l-1-6"/><path d="M6 10h12a4 4 0 0 1-12 0z" fill="currentColor" fill-opacity="0.18"/></svg></div>
+          <div class="lbl">Hall</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Animated demo ── -->
+  <div class="anim-panel">
+    <h2>Animation · play to see expansion sequence</h2>
+    <div class="anim-host">
+      <div class="card compact" id="anim-card" style="width:100px; padding:22px 18px 18px">
+        <div class="anim-area" id="anim-area" style="height:380px">
+          <!-- slider 1 (always present; .tall in compact, regular when expanded) -->
+          <div class="a-slider" id="s1" style="left:50%; top:0; transform:translateX(-50%)">
+            <div class="sp-slider sm tall"><div class="sp-fill" style="height:60%"></div><div class="sp-thumb" style="--pct:60">60</div></div>
+          </div>
+          <!-- slider 2 + 3 (hidden in compact) -->
+          <div class="a-slider" id="s2" style="left:50%; top:0; transform:translateX(-50%); opacity:0">
+            <div class="sp-slider sm"><div class="sp-fill" style="height:55%"></div><div class="sp-thumb" style="--pct:55">55</div></div>
+          </div>
+          <div class="a-slider" id="s3" style="left:50%; top:0; transform:translateX(-50%); opacity:0">
+            <div class="sp-slider sm"><div class="sp-fill" style="height:65%"></div><div class="sp-thumb" style="--pct:65">65</div></div>
+          </div>
+
+          <!-- members (hidden in compact, fade up in expanded) -->
+          <div class="a-member" id="m1" style="left:50%; top:200px; transform:translateX(-50%); opacity:0">
+            <div class="ic"><svg viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.6 1 2.5h6c0-.9.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg></div>
+            <div class="lbl">L1</div>
+          </div>
+          <div class="a-member" id="m2" style="left:50%; top:200px; transform:translateX(-50%); opacity:0">
+            <div class="ic"><svg viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.6 1 2.5h6c0-.9.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg></div>
+            <div class="lbl">L2</div>
+          </div>
+          <div class="a-member" id="m3" style="left:50%; top:200px; transform:translateX(-50%); opacity:0">
+            <div class="ic"><svg viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.6 1 2.5h6c0-.9.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg></div>
+            <div class="lbl">L3</div>
+          </div>
+
+          <!-- mindmap funnels FROM L1-L3 row (top) DOWN to the group lamp (bottom).
+               viewBox 240×40; L1-L3 centers at 66.9/120/173.1, lamp at 120. -->
+          <svg class="a-mindmap" id="mm" viewBox="0 0 240 40" preserveAspectRatio="none" style="width:244px; height:40px; left:50%; top:224px; transform:translateX(-50%); opacity:0; overflow:visible">
+            <g stroke="#f4b91d" stroke-width="2.6" fill="none" stroke-linecap="round" opacity="0.92">
+              <path d="M 66.9 4 C 64.12 15.2, 100.9 24.8, 120 36"/>
+              <path d="M 120 4 C 120 15.2, 120 24.8, 120 36"/>
+              <path d="M 173.1 4 C 175.88 15.2, 139.1 24.8, 120 36"/>
+            </g>
+          </svg>
+
+          <!-- group icon -->
+          <div class="a-group" id="grp" style="left:50%; top:270px; transform:translateX(-50%)">
+            <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 4h14"/><path d="M7 4l-1 6h12l-1-6"/><path d="M6 10h12a4 4 0 0 1-12 0z" fill="currentColor" fill-opacity="0.18"/></svg></div>
+            <div class="lbl">Hall</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="on" data-step="0">1 · compact</button>
+      <button data-step="1">2 · long-press</button>
+      <button data-step="2">3 · expanded</button>
+      <button data-play>▶ play</button>
+    </div>
+    <div class="caption">lamp anchors at bottom · sliders multiply outward · L1-L3 emerge under sliders · mindmap funnels down to lamp</div>
+  </div>
+</div>
+
+<script>
+const card = document.getElementById("anim-card");
+const grp  = document.getElementById("grp");
+const s1 = document.getElementById("s1");
+const s1Inner = s1.querySelector(".sp-slider");
+const s2 = document.getElementById("s2");
+const s3 = document.getElementById("s3");
+const m1 = document.getElementById("m1");
+const m2 = document.getElementById("m2");
+const m3 = document.getElementById("m3");
+const mm = document.getElementById("mm");
+const buttons = document.querySelectorAll(".controls button[data-step]");
+const playBtn = document.querySelector(".controls button[data-play]");
+
+const STATES = [
+  // 0 · compact — lamp sits at bottom in compact too, so it stays put on expand.
+  () => {
+    card.style.width = "100px";
+    grp.classList.remove("glow");
+    s1Inner.classList.add("tall");
+    s1.style.left = "50%"; s1.style.top = "0"; s1.style.opacity = "1";
+    s2.style.left = "50%"; s2.style.top = "0"; s2.style.opacity = "0";
+    s3.style.left = "50%"; s3.style.top = "0"; s3.style.opacity = "0";
+    // members hidden, parked at lamp position so they appear to emerge from it
+    m1.style.left = "50%"; m1.style.top = "270px"; m1.style.opacity = "0";
+    m2.style.left = "50%"; m2.style.top = "270px"; m2.style.opacity = "0";
+    m3.style.left = "50%"; m3.style.top = "270px"; m3.style.opacity = "0";
+    mm.style.opacity = "0";
+    grp.style.left = "50%"; grp.style.top = "270px";
+  },
+  // 1 · long-press (still compact, glow on group)
+  () => {
+    card.style.width = "100px";
+    grp.classList.add("glow");
+    s1Inner.classList.add("tall");
+    s1.style.left = "50%"; s1.style.top = "0"; s1.style.opacity = "1";
+    s2.style.opacity = "0"; s3.style.opacity = "0";
+    m1.style.opacity = "0"; m2.style.opacity = "0"; m3.style.opacity = "0";
+    mm.style.opacity = "0";
+    grp.style.left = "50%"; grp.style.top = "270px";
+  },
+  // 2 · expanded — vertical order top→bottom:
+  //   sliders 0…170 · members (L1-L3) 176…218 · mindmap 224…264 · lamp 270…
+  // sliders gap:14 (47px tracks) → centers ±61px from card center
+  // members align with sliders (same gap/centers) so the mindmap funnels straight down to lamp.
+  () => {
+    card.style.width = "280px";
+    grp.classList.remove("glow");
+    s1Inner.classList.remove("tall");
+    s1.style.left = "50%";               s1.style.top = "0";
+    s2.style.left = "calc(50% - 61px)";  s2.style.top = "0"; s2.style.opacity = "1";
+    s3.style.left = "calc(50% + 61px)";  s3.style.top = "0"; s3.style.opacity = "1";
+    // members appear DIRECTLY UNDER the sliders, aligned with slider centers
+    m1.style.left = "calc(50% - 61px)"; m1.style.top = "176px"; m1.style.opacity = "1";
+    m2.style.left = "50%";              m2.style.top = "176px"; m2.style.opacity = "1";
+    m3.style.left = "calc(50% + 61px)"; m3.style.top = "176px"; m3.style.opacity = "1";
+    // mindmap funnels from L1-L3 row down to lamp
+    mm.style.top = "224px";
+    setTimeout(() => mm.style.opacity = "1", 220);
+    // lamp now sits at the BOTTOM, where the mindmap converges
+    grp.style.left = "50%"; grp.style.top = "270px";
+  },
+];
+
+function setStep(i) {
+  STATES[i]();
+  buttons.forEach((b, idx) => b.classList.toggle("on", idx === i));
+}
+buttons.forEach((b, i) => b.addEventListener("click", () => setStep(i)));
+
+let playing = false;
+playBtn.addEventListener("click", async () => {
+  if (playing) return;
+  playing = true;
+  playBtn.textContent = "▶ playing…";
+  setStep(0); await new Promise(r => setTimeout(r, 700));
+  setStep(1); await new Promise(r => setTimeout(r, 900));
+  setStep(2); await new Promise(r => setTimeout(r, 1400));
+  // loop back
+  setStep(0);
+  playing = false;
+  playBtn.textContent = "▶ play";
+});
+
+setStep(0);
+</script>
+</body>
+</html>

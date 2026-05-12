@@ -1,0 +1,13 @@
+# Card 5 — Compact group with full-length slider
+#
+# Same as Card 4 but `full_length_sliders: true` — slider goes from 220 px
+# to 260 px so it has more visual weight in the dashboard. Use when the
+# group-card sits alone in a row (not next to single-light tiles where
+# 220 px would line up better).
+
+type: custom:everyday-light-card
+entity: light.hall_spots
+group:
+  layout: compact
+  full_length_sliders: true
+  expansion_mode: inline

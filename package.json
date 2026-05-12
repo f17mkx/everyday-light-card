@@ -1,0 +1,53 @@
+{
+  "name": "everyday-light-card",
+  "version": "1.0.0",
+  "description": "Group-aware Lovelace light card with mindmap-path topology, in-place mode picker, saved-colors edit mode, and runtime-rotatable gestures. Brand: everyday by f17mkx.",
+  "main": "dist/everyday-light-card.js",
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c rollup.config.mjs",
+    "dev": "rollup -c rollup.config.mjs --watch",
+    "lint": "eslint 'src/**/*.ts'",
+    "lint:css-comments": "node scripts/check-css-comments.js",
+    "prebuild": "npm run lint:css-comments",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "release:sync": "bash scripts/sync-to-public.sh"
+  },
+  "keywords": [
+    "home-assistant",
+    "lovelace",
+    "lovelace-card",
+    "lit-element",
+    "light-card",
+    "hacs",
+    "everyday"
+  ],
+  "author": "Stefan Volk <stefan.volk23@gmail.com> (f17mkx)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/f17mkx/everyday-light-card.git"
+  },
+  "dependencies": {
+    "custom-card-helpers": "^1.9.0",
+    "lit": "^3.1.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vitest/coverage-v8": "^1.6.1",
+    "eslint": "^8.57.0",
+    "happy-dom": "^20.9.0",
+    "rollup": "^4.12.0",
+    "tslib": "^2.6.2",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.1"
+  }
+}

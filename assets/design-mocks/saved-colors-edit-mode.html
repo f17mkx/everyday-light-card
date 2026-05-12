@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>saved-colors-edit-mode</title>
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  body { padding: 32px 24px 60px; background: var(--bg-navy); }
+  .stack {
+    max-width: 460px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .popcard {
+    background: rgba(42, 42, 61, 0.78);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 22px;
+    box-shadow: var(--shadow);
+    padding: 22px 22px 24px;
+  }
+  .popcard h3 {
+    margin: 0 0 14px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .stage {
+    width: 320px;
+    height: 280px;
+    margin: 0 auto;
+    position: relative;
+  }
+  .swatch {
+    position: absolute;
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.2);
+    transform: translate(-50%, -50%);
+  }
+  .swatch.add {
+    background: transparent;
+    border: 1.5px dashed rgba(255,255,255,0.42);
+    color: var(--text-dim);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; font-weight: 300;
+    line-height: 1;
+  }
+  .badge {
+    position: absolute;
+    top: -5px; right: -5px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #e23636;
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 600;
+    line-height: 1;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    z-index: 2;
+  }
+  .badge::before { content: "−"; transform: translateY(-1px); }
+
+  /* circle itself wobbles around its own center — translate-jitter, not rotate */
+  @keyframes wig {
+    0%   { transform: translate(calc(-50% - 1.6px), calc(-50% - 0.8px)); }
+    25%  { transform: translate(calc(-50% + 1.4px), calc(-50% + 1.2px)); }
+    50%  { transform: translate(calc(-50% + 1.6px), calc(-50% - 1.4px)); }
+    75%  { transform: translate(calc(-50% - 1.2px), calc(-50% + 1.6px)); }
+    100% { transform: translate(calc(-50% - 1.6px), calc(-50% - 0.8px)); }
+  }
+  @keyframes wig2 {
+    0%   { transform: translate(calc(-50% + 1.4px), calc(-50% + 1.4px)); }
+    25%  { transform: translate(calc(-50% - 1.6px), calc(-50% - 1.2px)); }
+    50%  { transform: translate(calc(-50% - 1.2px), calc(-50% + 1.6px)); }
+    75%  { transform: translate(calc(-50% + 1.6px), calc(-50% - 1.4px)); }
+    100% { transform: translate(calc(-50% + 1.4px), calc(-50% + 1.4px)); }
+  }
+  .wiggle    { animation: wig  0.42s ease-in-out infinite; }
+  .wiggle.b  { animation: wig2 0.46s ease-in-out infinite; }
+  /* badge stays fixed on the swatch (no wobble) */
+  .badge { animation: none !important; }
+
+  .footer-row {
+    display: flex;
+    justify-content: center;
+    margin-top: 14px;
+  }
+  /* check styled like + ghost-pill */
+  .check {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: transparent;
+    border: 1.5px dashed rgba(105, 220, 130, 0.55);
+    color: rgba(105, 220, 130, 0.9);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .check svg { width: 20px; height: 20px; }
+  .legend {
+    margin-top: 16px;
+    color: var(--text-faint);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="stack" data-screen-label="Mock 4 — Saved Colors Edit Mode">
+
+  <!-- Card 1 - View (N=7, hex pattern) -->
+  <div class="popcard">
+    <h3>Saved Colors · tap to apply (N=7 · hex)</h3>
+    <div class="stage" id="view-stage"></div>
+  </div>
+
+  <!-- Card 2 - Edit (N=6 → ghost shows N=7 hex slot) -->
+  <div class="popcard">
+    <h3>Edit · N=6 · ghost slot completes hex</h3>
+    <div class="stage" id="edit6-stage"></div>
+    <div class="footer-row">
+      <div class="check" title="Done">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 10 17 19 7"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card 3 - Edit (N=7 → ghost shows N=8 ring-2 slot) -->
+  <div class="popcard">
+    <h3>Edit · N=7 · next slot extends ring</h3>
+    <div class="stage" id="edit7-stage"></div>
+    <div class="footer-row">
+      <div class="check" title="Done">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 10 17 19 7"/></svg>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const PALETTE = ["#f47a00","#f8b27e","#fae8d2","#ffffff","#7e9ef8","#b27ef8","#f87ed8","#f87a6e","#4ad8c1"];
+const CX = 160, CY = 140;
+const R1 = 70, R2 = 118;
+function polar(r, deg) { const a = (deg - 90) * Math.PI / 180; return { x: CX + r*Math.cos(a), y: CY + r*Math.sin(a) }; }
+const HEX6 = [0,60,120,180,240,300].map(d => polar(R1, d));
+const RING2_12 = Array.from({length:12}, (_,i) => polar(R2, i*30+15));
+
+function layout(n) {
+  const C = { x: CX, y: CY };
+  switch (n) {
+    case 6: return HEX6.slice();
+    case 7: return [C, ...HEX6];
+    case 8: return [C, ...HEX6, RING2_12[0]];
+    default: return [C];
+  }
+}
+
+function fillStage(id, n, editMode, ghostNext) {
+  const stage = document.getElementById(id);
+  const positions = layout(n);
+  positions.forEach((p, i) => {
+    const s = document.createElement("div");
+    s.className = "swatch" + (editMode ? (i % 2 ? " wiggle b" : " wiggle") : "");
+    s.style.left = p.x + "px";
+    s.style.top = p.y + "px";
+    s.style.background = PALETTE[i % PALETTE.length];
+    if (editMode) {
+      const b = document.createElement("span");
+      b.className = "badge";
+      s.appendChild(b);
+    }
+    stage.appendChild(s);
+  });
+  if (ghostNext) {
+    const next = layout(n + 1);
+    const used = new Set(positions.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`));
+    const extra = next.find(p => !used.has(`${p.x.toFixed(1)},${p.y.toFixed(1)}`));
+    if (extra) {
+      const g = document.createElement("div");
+      g.className = "swatch add";
+      g.style.left = extra.x + "px";
+      g.style.top = extra.y + "px";
+      g.textContent = "+";
+      stage.appendChild(g);
+    }
+  }
+}
+
+fillStage("view-stage", 7, false, false);
+fillStage("edit6-stage", 6, true, true);
+fillStage("edit7-stage", 7, true, true);
+</script>
+</body>
+</html>

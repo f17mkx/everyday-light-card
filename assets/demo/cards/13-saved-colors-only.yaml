@@ -1,0 +1,24 @@
+# Card 13 — Saved-colors-only standalone (NEEDS R63, deferred to P21)
+#
+# Real-life: a "mood color" tile with no slider — just an 8-cell grid of
+# pre-saved colors. Tap → apply that color to the configured entity.
+# Long-press the title → edit-mode (delete colors, add the current color
+# of the entity to a free slot).
+#
+# Status: requires the still-unimplemented `view: saved-colors` render-mode
+# (R63 backlog). Currently the only entry-point to saved-colors is via
+# the in-place picker popup over the slider.
+
+type: custom:everyday-light-card
+entity: light.main
+view: saved-colors  # R63 — not yet implemented as of P15.6
+saved_colors:
+  static:
+    - [248, 141, 42]    # warm orange (brand)
+    - [255, 250, 234]   # warm white
+    - [200, 220, 255]   # cool white
+    - [255, 90, 90]     # red
+    - [255, 220, 90]    # amber
+    - [120, 220, 130]   # green
+    - [120, 180, 250]   # blue
+    - [200, 100, 220]   # purple

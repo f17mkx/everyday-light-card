@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>mindmap-geometries-n2-n8</title>
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  body { padding: 32px 24px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 18px;
+    max-width: 1240px;
+    margin: 0 auto;
+  }
+  .cell {
+    background: var(--bg-navy-deep);
+    border-radius: 28px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: var(--shadow);
+  }
+  .cell.empty { background: transparent; box-shadow: none; }
+  .cell svg { display: block; }
+  .cell .lbl {
+    margin-top: 10px;
+    color: var(--text-dim);
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    font-variant-numeric: tabular-nums;
+  }
+  .header {
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+</style>
+</head>
+<body>
+  <div class="header" data-screen-label="Mock 2 — Mindmap N=2..8">everyday-light-card · mindmap geometries</div>
+  <div class="grid" id="grid"></div>
+<script>
+const COLOR = "#f88d2a";
+const STROKE = "#f88d2a";
+const NS = "http://www.w3.org/2000/svg";
+const W = 300, H = 200;
+const yMembers = 30;
+const groupX = 150, groupY = 170;
+const junctionX = 150, junctionY = 110;
+const memberR = 12, groupR = 16;
+
+function buildSvg(n) {
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  // baseline svg dimensions; per-N overrides below
+  let svgW = 260, svgH = 180;
+  if (n === 5) svgH = 175;
+  if (n === 8) svgW = 257;
+  svg.setAttribute("width", String(svgW));
+  svg.setAttribute("height", String(svgH));
+
+  // member positions evenly spaced
+  const margin = 30;
+  const xs = [];
+  if (n === 1) xs.push(W / 2);
+  else for (let i = 0; i < n; i++) xs.push(margin + (W - 2 * margin) * i / (n - 1));
+
+  // smooth cubic Bézier S-curves into trunk
+  const g = document.createElementNS(NS, "g");
+  g.setAttribute("stroke", "#f4b91d");
+  g.setAttribute("stroke-width", "2.6");
+  g.setAttribute("fill", "none");
+  g.setAttribute("stroke-linecap", "round");
+  g.setAttribute("opacity", "0.92");
+
+  // Each line ORIGINATES at the group node (groupX, groupY) and curves up to
+  // each member. Outer arms have steeper initial angles, inner arms flatter
+  // — i.e. the bundle fans out tighter at the bottom and spreads at the top.
+  // We model this as cubic Béziers where the control point near the group
+  // sits directly above the group (vertical tangent for inner, slight tilt
+  // for outer), and the second control point pulls toward the member's x.
+  for (const x of xs) {
+    const dx = x - groupX;
+    const absDx = Math.abs(dx);
+    // outward push: outer arms bow outward (past the member's x) then come
+    // back vertical at the top. inner arms barely deviate.
+    const outwardPush = absDx * 0.35; // larger for outer arms
+    const c1x = groupX + dx * 0.15 + Math.sign(dx) * outwardPush * 0.6;
+    const c1y = groupY - (groupY - yMembers) * 0.35;
+    // second control: directly above the member (vertical approach at top)
+    // — outer arms come straight down into their member.
+    const c2x = x + Math.sign(dx) * outwardPush * 0.15;
+    const c2y = yMembers + (groupY - yMembers) * 0.35;
+    const path = document.createElementNS(NS, "path");
+    path.setAttribute("d",
+      `M ${groupX} ${groupY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x} ${yMembers}`);
+    // per-arm tweak: N=5 fourth arm (x=210) gets a slightly heavier stroke
+    if (n === 5 && x === 210) path.setAttribute("stroke-width", "3");
+    g.appendChild(path);
+  }
+
+  svg.appendChild(g);
+
+  // member circles
+  for (const x of xs) {
+    const c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", x);
+    c.setAttribute("cy", yMembers);
+    c.setAttribute("r", memberR);
+    c.setAttribute("fill", "#3a3a52");
+    c.setAttribute("stroke", "#f4b91d");
+    c.setAttribute("stroke-width", "2");
+    svg.appendChild(c);
+  }
+
+  // group circle
+  const gc = document.createElementNS(NS, "circle");
+  gc.setAttribute("cx", groupX);
+  gc.setAttribute("cy", groupY);
+  gc.setAttribute("r", groupR);
+  gc.setAttribute("fill", "#3a3a52");
+  gc.setAttribute("stroke", "#f4b91d");
+  gc.setAttribute("stroke-width", "2");
+  svg.appendChild(gc);
+
+  return svg;
+}
+
+const root = document.getElementById("grid");
+for (const n of [2,3,4,5,6,7,8]) {
+  const cell = document.createElement("div");
+  cell.className = "cell";
+  cell.appendChild(buildSvg(n));
+  const lbl = document.createElement("div");
+  lbl.className = "lbl";
+  lbl.textContent = `N=${n}`;
+  cell.appendChild(lbl);
+  root.appendChild(cell);
+}
+const empty = document.createElement("div");
+empty.className = "cell empty";
+root.appendChild(empty);
+</script>
+</body>
+</html>

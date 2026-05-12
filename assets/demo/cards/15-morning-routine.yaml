@@ -1,0 +1,37 @@
+# Card 15 — Morning routine (NEW P15.6-r31)
+#
+# Real-life: wake-up tile by the bed. Color-temp shifts cool→warm as the
+# day progresses, plus a manual override slider when Stefan wants a
+# specific kelvin value (e.g. 5000 K morning, 2700 K evening).
+#
+# Entity: `light.main` (the apartment's main room light, since Stefan's
+# Munich apartment has one room — no separate bedroom). Adapt to a
+# `light.bedroom` if your home has one.
+#
+# Layout choice: parallel-inline showing brightness + temperature side-by-
+# side (skip hue/saturation — morning routines stay in white-light mode).
+# Slider height = 220 (parallel default post-r29, matches expanded false).
+#
+# Helper-driven workflow (optional, requires automation):
+#   1. Create `input_number.morning_kelvin` (min 2200, max 6500, step 100).
+#   2. HA automation runs at sunrise → sets input_number based on time-of-day.
+#   3. Card reads `input_number.morning_kelvin` via template (out-of-scope
+#      for this YAML — see docs/howto/08-night-mode-routine.md when shipped).
+#   4. User can override by dragging the temperature slider; automation
+#      re-applies at the next time-step.
+
+type: custom:everyday-light-card
+entity: light.main
+name: Morning
+icon: mdi:weather-sunset-up
+default_view_mode: parallel
+parallel_sliders:
+  modes:
+    - brightness
+    - temperature
+  show_labels: true
+  full_length: false  # 220 px — sized to sit next to compact-group cards
+gestures:
+  member_icon:
+    long_press: color_wheel
+    double_tap: classic_more_info  # full HA more-info for advanced control

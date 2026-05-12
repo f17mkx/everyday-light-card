@@ -1,0 +1,24 @@
+# Card 7 — Mixer-fader speaker row v2 (Bubble-Card-inspired)
+#
+# Real-life: sofa speaker volume tile within thumb-reach of the couch.
+# Step-2 (P15.6-r31) layout: [icon | name+state | slider | − | + | ▶/⏸].
+#
+# Icon: ha-state-icon for media_player.* — entity-registry-resolved icon
+# with a circle background that turns active-orange when state=playing.
+# State sub-line: "playing" / "paused" / "idle" / "buffering" / "offline".
+# Slider: horizontal volume mixer with snap-to-discrete steps.
+# − / +: ±5 % volume buttons (white pill thumbs matching brightness slider).
+# ▶/⏸: play/pause toggle (media_play / media_pause services).
+#
+# The same custom-element handles both light.* AND media_player.* entities;
+# styleVariant=mixer + show_buttons=true + media_player domain → speaker row.
+#
+# Step-3 deferrals (BACKLOG): source picker (long-press → mode-picker
+# variant), per-speaker theme tinting from artwork, queue / shuffle.
+
+type: custom:everyday-light-card
+entity: media_player.sofa
+slider:
+  style: mixer
+  show_buttons: true
+  orientation: horizontal

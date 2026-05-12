@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>mode-picker-inplace</title>
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  body { padding: 40px 24px; }
+  .frame {
+    max-width: 1200px;
+    margin: 0 auto 28px;
+    background: var(--card);
+    border-radius: 24px;
+    padding: 28px 24px 24px;
+    box-shadow: var(--shadow);
+  }
+  .frame-title {
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--text-faint); margin-bottom: 20px;
+  }
+  .row {
+    display: grid;
+    gap: 12px;
+    align-items: end;
+  }
+  .row.three { grid-template-columns: repeat(3, 1fr); }
+  .row.four  { grid-template-columns: repeat(4, 1fr); }
+
+  .state {
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 18px 10px 8px;
+  }
+  .title {
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--text-faint); text-align: center;
+  }
+  .stage {
+    width: 200px; height: 160px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+  .tile {
+    width: 50px; height: 50px;
+    border-radius: 50%;
+    background: var(--tile);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--orange);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+  }
+  .tile.lp {
+    box-shadow: 0 0 0 3px rgba(248,141,42,0.18), 0 0 0 6px rgba(248,141,42,0.08), 0 4px 14px rgba(0,0,0,0.35);
+  }
+  .lbl {
+    color: var(--text-dim);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    margin-top: 4px;
+  }
+
+  /* picker stage with absolutely-positioned circles */
+  .picker {
+    position: relative;
+    width: 160px; height: 140px;
+  }
+  .pdot {
+    position: absolute;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: var(--tile);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--orange);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.35);
+    transform: translate(-50%, -50%);
+  }
+  .pdot.sel {
+    transform: translate(-50%, -50%) scale(1.14);
+    box-shadow: 0 0 0 2px var(--orange), 0 0 18px rgba(248,141,42,0.5), 0 4px 12px rgba(0,0,0,0.45);
+  }
+  .picker-labels {
+    display: flex; gap: 14px; color: var(--text-dim); font-size: 11px;
+    flex-wrap: wrap; justify-content: center;
+  }
+  .picker-labels span { width: 50px; text-align: center; }
+  .picker-labels .on { color: var(--orange); }
+
+  .g { width: 22px; height: 22px; display: block; }
+  .g-thermo, .g-palette, .g-bulb, .g-fx { stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .seven-dot circle { fill: currentColor; }
+
+  .footnote {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    color: var(--text-faint);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── 3-MODE: triangle picker ─────────────────────────── -->
+<div class="frame" data-screen-label="Mock 3 — Mode Picker (3 modes · triangle)">
+  <div class="frame-title">3-mode picker · equilateral triangle</div>
+  <div class="row four">
+    <div class="state">
+      <div class="title">1 · default</div>
+      <div class="stage">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+          <div class="tile">
+            <svg class="g g-bulb" viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.6 1 2.5h6c0-.9.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>
+          </div>
+          <div class="lbl">Door</div>
+        </div>
+      </div>
+    </div>
+    <div class="state">
+      <div class="title">2 · long-press 500ms</div>
+      <div class="stage">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+          <div class="tile lp">
+            <svg class="g g-bulb" viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.6 1 2.5h6c0-.9.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>
+          </div>
+          <div class="lbl">Door</div>
+        </div>
+      </div>
+    </div>
+    <div class="state">
+      <div class="title">3 · expanded · triangle</div>
+      <div class="stage">
+        <div class="picker" id="pk3-static"></div>
+      </div>
+      <div class="picker-labels"><span>Temp</span><span>Wheel</span><span>Saved</span></div>
+    </div>
+    <div class="state">
+      <div class="title">4 · selection</div>
+      <div class="stage">
+        <div class="picker" id="pk3-sel"></div>
+      </div>
+      <div class="picker-labels"><span>Temp</span><span class="on">Wheel</span><span>Saved</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 2-MODE: pair side-by-side ─────────────────────────── -->
+<div class="frame" data-screen-label="Mock 3 — Mode Picker (2 modes)">
+  <div class="frame-title">2-mode picker · pair</div>
+  <div class="row three">
+    <div class="state">
+      <div class="title">default</div>
+      <div class="stage">
+        <div class="tile">
+          <svg class="g g-bulb" viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.6 1 2.5h6c0-.9.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="state">
+      <div class="title">expanded</div>
+      <div class="stage">
+        <div class="picker" id="pk2-static"></div>
+      </div>
+      <div class="picker-labels"><span>Temp</span><span>Wheel</span></div>
+    </div>
+    <div class="state">
+      <div class="title">selection</div>
+      <div class="stage">
+        <div class="picker" id="pk2-sel"></div>
+      </div>
+      <div class="picker-labels"><span class="on">Temp</span><span>Wheel</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 4-MODE: diamond + center or square ─────────────────────────── -->
+<div class="frame" data-screen-label="Mock 3 — Mode Picker (4 modes)">
+  <div class="frame-title">4-mode picker · adds Effects</div>
+  <div class="row three">
+    <div class="state">
+      <div class="title">default</div>
+      <div class="stage">
+        <div class="tile">
+          <svg class="g g-bulb" viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.6 1 2.5h6c0-.9.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="state">
+      <div class="title">expanded · diamond</div>
+      <div class="stage">
+        <div class="picker" id="pk4-static"></div>
+      </div>
+      <div class="picker-labels"><span>Temp</span><span>Wheel</span><span>Saved</span><span>FX</span></div>
+    </div>
+    <div class="state">
+      <div class="title">selection · FX</div>
+      <div class="stage">
+        <div class="picker" id="pk4-sel"></div>
+      </div>
+      <div class="picker-labels"><span>Temp</span><span>Wheel</span><span>Saved</span><span class="on">FX</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const ICONS = {
+  thermo: `<svg class="g g-thermo" viewBox="0 0 24 24"><path d="M14 14.76V4.5a2.5 2.5 0 0 0-5 0v10.26a4 4 0 1 0 5 0z"/><line x1="11.5" y1="14" x2="11.5" y2="8"/></svg>`,
+  wheel:  `<svg class="g g-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1 0 1.5-.6 1.5-1.5 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.6-1.5 1.5-1.5H16a5 5 0 0 0 5-5c0-4-4-7.6-9-7.6z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7" r="1"/><circle cx="16.5" cy="10.5" r="1"/></svg>`,
+  saved:  `<svg class="g seven-dot" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="1.6"/><circle cx="15.5" cy="18.06" r="1.6"/><circle cx="8.5" cy="18.06" r="1.6"/><circle cx="5" cy="12" r="1.6"/><circle cx="8.5" cy="5.94" r="1.6"/><circle cx="15.5" cy="5.94" r="1.6"/></svg>`,
+  fx:     `<svg class="g g-fx" viewBox="0 0 24 24"><polygon points="12 3 14 9 20 9 15 13 17 19 12 16 7 19 9 13 4 9 10 9"/></svg>`,
+};
+
+// place dots in a picker box (160x140, center 80,70). polar from center
+function place(pickerEl, items, selectedIdx) {
+  const cx = 80, cy = 70;
+  items.forEach((it, i) => {
+    const d = document.createElement("div");
+    d.className = "pdot" + (i === selectedIdx ? " sel" : "");
+    d.style.left = (cx + it.x) + "px";
+    d.style.top  = (cy + it.y) + "px";
+    d.innerHTML = ICONS[it.icon];
+    pickerEl.appendChild(d);
+  });
+}
+
+// ─ 3-mode equilateral triangle, point-down so labels under each work
+// vertices: top-left, top-right, bottom (center)
+const r3 = 44;
+const TRI3 = [
+  { icon: "thermo", x: -r3 * Math.cos(Math.PI/6), y: -r3 * Math.sin(Math.PI/6) },
+  { icon: "saved",  x:  r3 * Math.cos(Math.PI/6), y: -r3 * Math.sin(Math.PI/6) },
+  { icon: "wheel",  x: 0, y: r3 },
+];
+// label order: Temp, Wheel, Saved → reorder
+// Actually: top-left=Temp, bottom=Wheel, top-right=Saved  ✓
+place(document.getElementById("pk3-static"), TRI3, -1);
+place(document.getElementById("pk3-sel"), TRI3, 1);  // selected = wheel? no, let's pick Wheel = item idx 2 (bottom)
+// fix: replace selection
+document.getElementById("pk3-sel").innerHTML = "";
+place(document.getElementById("pk3-sel"), TRI3, 2);
+
+// ─ 2-mode pair side-by-side
+const PAIR2 = [
+  { icon: "thermo", x: -32, y: 0 },
+  { icon: "wheel",  x:  32, y: 0 },
+];
+place(document.getElementById("pk2-static"), PAIR2, -1);
+place(document.getElementById("pk2-sel"), PAIR2, 0);
+
+// ─ 4-mode diamond (top, right, bottom, left)
+const DIA4 = [
+  { icon: "thermo", x:  0,  y: -42 },
+  { icon: "wheel",  x:  42, y:  0 },
+  { icon: "saved",  x:  0,  y:  42 },
+  { icon: "fx",     x: -42, y:  0 },
+];
+place(document.getElementById("pk4-static"), DIA4, -1);
+place(document.getElementById("pk4-sel"), DIA4, 3);
+</script>
+</body>
+</html>

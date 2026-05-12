@@ -1,0 +1,124 @@
+/* superpro-light-card - shared design tokens for Phase 1 mocks (v2) */
+:root {
+  --bg-navy: #1f1f2e;
+  --bg-navy-deep: #16161f;
+  --card: #2a2a3d;
+  --card-2: #3a3a52;
+  --tile: #3a3a52;
+  --tile-2: #4a4a66;
+  --ghost: rgba(0, 0, 0, 0.32);
+  --ghost-2: rgba(255, 255, 255, 0.06);
+  --orange: #f88d2a;
+  --orange-warm: #f47a00;
+  /* purple light brand from screenshot — used as default lit-light fill */
+  --light-fill: #d6bff5;
+  --light-fill-deep: #b89be3;
+  --thumb: #ffffff;
+  --text: #ffffff;
+  --text-dim: #b8b8c8;
+  --text-faint: #7a7a90;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --radius: 16px;
+  --pad: 24px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-navy);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+/* ─── shared vertical pill slider (matches screenshot) ─────────────── */
+.sp-slider {
+  width: 64px;
+  height: 220px;
+  border-radius: 32px;
+  background: rgba(0, 0, 0, 0.42);
+  position: relative;
+  overflow: visible;
+  /* deeper inner shadow so the track reads as a recessed channel */
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,0.55),
+    inset 0 -1px 2px rgba(255,255,255,0.04),
+    inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+.sp-slider .sp-fill {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  background: var(--light-fill);
+  border-radius: 32px;
+  box-shadow: 0 6px 24px rgba(214, 191, 245, 0.22);
+}
+.sp-slider .sp-thumb {
+  /* knob always sits INSIDE the colored fill area, with equal 7px margin
+     to the track on every side. The thumb's TOP EDGE rides on the fill's
+     top edge (so it appears anchored to the fill), clamped to the safe
+     inner range so it never escapes the track.
+
+     side margin = (track_width 64 - thumb_width 50) / 2 = 7px
+     thumb_bottom_from_track_bottom = clamp( 7px,
+                                              fill_height - thumb_height,
+                                              track_height - thumb_height - 7px )
+     where fill_height = (pct/100) * track_height = (pct/100) * 100% */
+  position: absolute;
+  left: 7px;
+  width: 50px; height: 50px;
+  border-radius: 50%;
+  /* white outer ring (matches the temp-knob treatment) */
+  background: #ffffff;
+  border: 2px solid rgba(255,255,255,0.92);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.35);
+  /* At pct=0 the thumb rests 7px from the track bottom — same as the
+     side margins (= (track_width 64 - thumb_width 50) / 2). At pct=100
+     it sits 7px from the top. In between, the thumb's top edge sits
+     7px BELOW the fill's top edge (the user-specified offset). */
+  bottom: clamp(
+    7px,
+    calc((100% * var(--pct, 0) / 100) - 50px - 7px),
+    calc(100% - 50px - 7px)
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent; /* hide the numeric label so the disc reads cleanly */
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+/* inner colored disc — sunken into the white knob via inset shadow,
+   matches the temp-track knob treatment */
+.sp-slider .sp-thumb::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: var(--current-light, var(--light-fill));
+  box-shadow:
+    inset 0 3px 5px rgba(0,0,0,0.35),
+    inset 0 1px 2px rgba(0,0,0,0.25),
+    inset 0 -1px 1px rgba(255,255,255,0.35);
+}
+/* keep thumb visually contained in the track */
+.sp-slider { overflow: hidden; }
+
+/* sizes */
+.sp-slider.sm { width: 50px; height: 170px; border-radius: 25px; }
+.sp-slider.sm .sp-thumb { width: 40px; height: 40px; font-size: 11px; }
+.sp-slider.lg { width: 80px; height: 280px; border-radius: 40px; }
+.sp-slider.lg .sp-thumb { width: 60px; height: 60px; font-size: 13px; }
+
+/* orange variant for group/active states elsewhere */
+.sp-slider.orange .sp-fill { background: var(--orange); box-shadow: 0 6px 24px rgba(248,141,42,0.25); }

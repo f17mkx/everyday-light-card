@@ -1,0 +1,200 @@
+# everyday-light-card — demo dashboard (HACS-launch trim, 2026-05-11)
+#
+# Paste into Settings → Dashboards → ⋮ → Edit dashboard → Raw YAML.
+#
+# Stefan-2026-05-11 (final-polish pre-launch):
+#   - Every view stripped to true defaults — only override when the view
+#     specifically demos a non-default.
+#   - View 4 (Nested) is the centerpiece: real apartment tree built on
+#     `light.everyday_*` helper groups (see assets/demo/ha-config/).
+#   - R234 single-light fix shipped — passing a member-entity now renders
+#     just that light (not the auto-detected parent group).
+#
+# 5 views, smallest config that demos the path:
+#   1. Singles      — one-light tile (proves R234 single-light fix)
+#   2. Groups       — compact + expanded on a real group
+#   3. Master       — apartment-wide tile + parallel-axis tile
+#   4. Nested       — the apartment tree, recursive embed
+#   5. Speaker      — media_player support
+#
+# Requires HACS: lovelace-layout-card (grid-layout type).
+
+views:
+  # ============================================================
+  # View 1 — Singles
+  # Single-light tile. R234 (2026-05-11): passing a member-entity
+  # now renders just that one light, never the auto-detected group.
+  # ============================================================
+  - title: Singles
+    path: singles
+    icon: mdi:lightbulb
+    type: custom:grid-layout
+    badges: []
+    cards:
+      # Card 1: one bulb. Default config — vertical pill slider.
+      - type: custom:everyday-light-card
+        entity: light.hall_spot_1
+        name: Hall Spot 1 (single)
+
+      # Card 2: another single bulb — proves it doesn't auto-render as
+      # `light.hall_spots` group anymore.
+      - type: custom:everyday-light-card
+        entity: light.hall_spot_2
+        name: Hall Spot 2 (single)
+
+  # ============================================================
+  # View 2 — Groups
+  # Compact vs expanded on a real group entity.
+  # ============================================================
+  - title: Groups
+    path: groups
+    icon: mdi:lightbulb-group
+    type: custom:grid-layout
+    badges: []
+    cards:
+      # Card 3: compact group. Tap toggles, long-press expands.
+      - type: custom:everyday-light-card
+        entity: light.hall_spots
+        name: Hall (compact)
+        group:
+          layout: compact
+
+      # Card 4: expanded group. Always-visible topology.
+      - type: custom:everyday-light-card
+        entity: light.hall_spots
+        name: Hall (expanded)
+        group:
+          layout: expanded
+
+  # ============================================================
+  # View 3 — Master + Parallel
+  # Apartment-wide master tile + 4-axis parallel for color mixing.
+  # ============================================================
+  - title: Master
+    path: master
+    icon: mdi:home-lightbulb
+    type: custom:grid-layout
+    badges: []
+    cards:
+      # Card 5: apartment-master via the everyday_all helper group.
+      - type: custom:everyday-light-card
+        entity: light.everyday_all
+        name: Apartment
+        icon: mdi:home-lightbulb
+        group:
+          layout: compact
+
+      # Card 6: parallel-axis mood tile (brightness + temp + hue + sat).
+      - type: custom:everyday-light-card
+        entity: light.main
+        name: Mood (4-axis)
+        default_view_mode: parallel
+
+  # ============================================================
+  # View 4 — Nested (the centerpiece, P15.6-r50 R234)
+  # Stefan's apartment, full tree, built on the everyday_* helpers
+  # (see assets/demo/ha-config/everyday_groups.yaml).
+  #
+  #   light.everyday_all
+  #   ├── light.back            (zigbee group)
+  #   │   ├── light.kitchen
+  #   │   │   ├── light.kitchen_ceiling   (popup-expand subgroup)
+  #   │   │   └── light.kitchen_counter
+  #   │   ├── light.bathroom
+  #   │   │   ├── mirror, wall_1, wall_2
+  #   │   └── light.hall
+  #   │       ├── light.hall_spots        (inline-collapsed subgroup)
+  #   │       ├── light.hall_boxes_2
+  #   │       └── light.hall_door
+  #   └── light.everyday_main             (helper)
+  #       └── desk_ceiling, tv, mirror, bed, window, sofa
+  # ============================================================
+  - title: Nested
+    path: nested
+    icon: mdi:family-tree
+    type: custom:grid-layout
+    badges: []
+    cards:
+      - type: custom:everyday-light-card
+        entity: light.everyday_all
+        name: Apartment
+        icon: mdi:home-lightbulb
+        group:
+          # Stefan-2026-05-11 R245: bottom-iconPosition (default) for the
+          # whole tree. Reverted R243's icon_position:top — Stefan
+          # explicitly: "Whole tree muss bottom-up sein!!". Embedded
+          # children also no longer get forced 'top' override.
+          layout: expanded
+          manual_members:
+            - entity: light.back
+              name: Back
+              icon: mdi:sofa
+              group:
+                layout: expanded
+                manual_members:
+                  - entity: light.kitchen
+                    name: Kitchen
+                    icon: mdi:countertop
+                    group:
+                      layout: expanded
+                      manual_members:
+                        - entity: light.kitchen_ceiling
+                          name: Ceiling
+                          icon: mdi:ceiling-light-multiple
+                          group:
+                            # Stefan-2026-05-11 R246: switched from
+                            # expansion_mode:popup to :inline. Popup
+                            # variant was clipping at the left edge of
+                            # the grid cell and rendering sliders under
+                            # kitchen_counter when expanded. Inline
+                            # matches hall_spots' behaviour and reflows
+                            # siblings cleanly.
+                            layout: compact
+                            expansion_mode: inline
+                        - light.kitchen_counter
+                  - entity: light.bathroom
+                    name: Bathroom
+                    icon: mdi:shower
+                    group:
+                      layout: expanded
+                      manual_members:
+                        - light.bathroom_mirror
+                        - light.bathroom_wall_1
+                        - light.bathroom_wall_2
+                  - entity: light.hall
+                    name: Hall
+                    icon: mdi:hanger
+                    group:
+                      layout: expanded
+                      manual_members:
+                        - entity: light.hall_spots
+                          name: Spots
+                          icon: mdi:track-light
+                          group:
+                            layout: compact
+                            expansion_mode: inline
+                        - light.hall_boxes_2
+                        - light.hall_door
+            - entity: light.everyday_main
+              name: Main
+              icon: mdi:bed
+              group:
+                layout: expanded
+
+  # ============================================================
+  # View 5 — Speaker
+  # media_player support — mixer-fader speaker row.
+  # ============================================================
+  - title: Speaker
+    path: speaker
+    icon: mdi:speaker
+    type: custom:grid-layout
+    badges: []
+    cards:
+      - type: custom:everyday-light-card
+        entity: media_player.sofa
+        name: Sofa
+        slider:
+          style: mixer
+          show_buttons: true
+          orientation: horizontal

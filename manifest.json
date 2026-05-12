@@ -1,0 +1,8 @@
+{
+  "name": "Everyday Light Card",
+  "type": "lovelace",
+  "render_readme": true,
+  "version": "1.0.0",
+  "content_in_root": false,
+  "filename": "everyday-light-card.js"
+}

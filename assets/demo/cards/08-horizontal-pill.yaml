@@ -1,0 +1,15 @@
+# Card 8 — Horizontal pill (floor-lamp wall-tile)
+#
+# Real-life: tile mounted near a power switch, where vertical slider would
+# clip. Horizontal pill makes the slider lay flat with [icon | slider |
+# name+state] in a single row.
+#
+# Long-press the icon → mode-picker for color-wheel / saved-colors.
+# Tap-to-toggle. Same gesture vocabulary as the vertical layout, just
+# rotated 90°.
+
+type: custom:everyday-light-card
+entity: light.hall_spot_1
+slider:
+  orientation: horizontal
+  style: pill

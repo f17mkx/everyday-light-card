@@ -1,0 +1,20 @@
+# Card 9 — Effects list (gradient strip)
+#
+# Real-life: gradient strip behind the bed/sofa with 20+ pre-programmed
+# effects ("fireplace", "ocean", "lava", etc.). Card replaces the slider
+# with a scrollable list of effect names. Tap an effect = `light.turn_on
+# effect: <name>`.
+#
+# Edit-mode (long-press the title): drag-to-reorder, tap-X to delete an
+# effect from the active list. Deleted effects move to a grayed-out
+# section at the bottom; tap-to-restore.
+#
+# Optional persistence via `effects_picker.source`: stores activeOrder as
+# JSON in an `input_text` helper so the user's preferred ordering survives
+# HA restarts.
+
+type: custom:everyday-light-card
+entity: light.main_heater_2
+default_view_mode: effects-picker
+effects_picker:
+  source: helper:input_text.everyday_effects_main_heater_2

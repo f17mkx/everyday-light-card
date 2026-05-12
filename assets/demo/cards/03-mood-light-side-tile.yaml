@@ -1,0 +1,18 @@
+# Card 3 — Mood-light side-tile (hue + saturation only)
+#
+# Real-life: dedicated color-control tile. Strip out brightness/temp so
+# the user only thinks about color. Pair with Card 1 in a horizontal-stack
+# for [brightness] | [hue/sat] split-control.
+#
+# Hue slider top = red 360°, middle = green 120°, bottom = red 0°. Click
+# anywhere on the gradient to jump to that hue (post-r25 gradient stops
+# now match the thumb-valid Y range — click-on-green = ~120°).
+
+type: custom:everyday-light-card
+entity: light.main
+default_view_mode: parallel
+parallel_sliders:
+  modes:
+    - hue
+    - saturation
+  show_labels: true

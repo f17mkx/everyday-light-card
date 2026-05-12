@@ -1,0 +1,5 @@
+# GitHub funding-button configuration.
+# Renders the "Sponsor" button on the repo page + the sponsor-this-project widget.
+
+github: [f17mkx]
+buy_me_a_coffee: f17mkx

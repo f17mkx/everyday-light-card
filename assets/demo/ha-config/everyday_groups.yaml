@@ -1,0 +1,73 @@
+# Everyday-light-card — apartment helper groups
+#
+# Why these helpers, not the auto-created Zigbee groups?
+#   - Zigbee integrations expose a flat `light.all` containing every bulb.
+#     That's useless for a topology view because there's no hierarchy.
+#   - The card needs `entity_id` arrays that match the *nested* structure
+#     the dashboard wants to render (apartment → rooms → fixtures).
+#   - The `everyday_*` prefix keeps these hand-built helpers clearly
+#     separate from anything the integration auto-creates.
+#
+# Layout (Stefan's apartment, 2026-05-11):
+#   light.everyday_all
+#   ├── light.back              (existing zigbee group, kitchen+bath+hall)
+#   └── light.everyday_main     (helper below)
+#
+#   light.everyday_main         all main_* lights in display order
+#   light.everyday_hall         hall_spots + hall_boxes_2 + hall_door
+#   light.everyday_kitchen      kitchen_ceiling + kitchen_counter
+#   light.everyday_bathroom     mirror first, then walls (overrides the
+#                               zigbee group order which is walls first)
+#
+# Install:
+#   1. scp -O -P 22 this file → hassio:/config/packages/everyday_groups.yaml
+#   2. ha_check_config         → valid?
+#   3. ha_restart              → entities materialise
+#
+# Removal:
+#   1. rm /config/packages/everyday_groups.yaml
+#   2. Restart HA
+
+light:
+  - platform: group
+    name: Everyday All
+    unique_id: everyday_all
+    entities:
+      - light.back
+      - light.everyday_main
+
+  - platform: group
+    name: Everyday Main
+    unique_id: everyday_main
+    entities:
+      - light.main_desk_ceiling
+      - light.main_tv
+      - light.main_mirror
+      - light.main_bed
+      - light.main_window
+      - light.main_sofa
+
+  - platform: group
+    name: Everyday Hall
+    unique_id: everyday_hall
+    entities:
+      - light.hall_spots
+      - light.hall_boxes_2
+      - light.hall_door
+
+  - platform: group
+    name: Everyday Kitchen
+    unique_id: everyday_kitchen
+    entities:
+      - light.kitchen_ceiling
+      - light.kitchen_counter
+
+  # everyday_bathroom: the zigbee group has wall_1 + wall_2 + mirror.
+  # The demo tree wants mirror first. Override via this helper.
+  - platform: group
+    name: Everyday Bathroom
+    unique_id: everyday_bathroom
+    entities:
+      - light.bathroom_mirror
+      - light.bathroom_wall_1
+      - light.bathroom_wall_2

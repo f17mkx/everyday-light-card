@@ -1,0 +1,10 @@
+# Card 1 — Bedside dimmer
+#
+# Real-life: lamp on the nightstand. Single brightness slider, big enough
+# to drag in the dark with one thumb. Tap = on/off. Long-press the icon
+# opens the mode-picker so you can switch to color-temp mode for sleep.
+#
+# This is the simplest possible config — the card with just an entity.
+
+type: custom:everyday-light-card
+entity: light.hall_spot_1

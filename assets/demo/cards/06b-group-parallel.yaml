@@ -1,0 +1,18 @@
+# Card 6b — Group parallel (color control on a group)
+#
+# Real-life: hall as a single color-controllable surface. Group-level
+# parallel-inline sliders fan-out service calls to all 3 members, so
+# `light.turn_on hs_color: ...` paints all 3 spots at once.
+#
+# Default-parallel takes priority over group-detection — even though
+# `light.hall_spots` is a group, this card renders as if it were a
+# single entity with parallel sliders.
+
+type: custom:everyday-light-card
+entity: light.hall_spots
+default_view_mode: parallel
+parallel_sliders:
+  modes:
+    - hue
+    - saturation
+  show_labels: true

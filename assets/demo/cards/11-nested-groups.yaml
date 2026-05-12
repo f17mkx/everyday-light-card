@@ -1,0 +1,45 @@
+# Card 11 — Nested groups (P15.6-r48 R208)
+#
+# Real-life: one master tile that visually contains 3 sub-groups, each
+# with its own slider + members. Stefan's apartment topology fits this
+# pattern: light.back rolls up to all rooms, hall + bath + kitchen are
+# sub-groups, each with its own ceiling spots / wall lights.
+#
+# Each sub-group renders as an embedded everyday-light-card inside the
+# parent's grid — its own gestures, mode-picker, saved-colors, parallel
+# sliders all work independently. Per-sub-group configs are layered:
+# hall expands inline, kitchen uses popup, bath is a leaf with no group.
+#
+# How it works:
+#   - Top-level entity: light.back (the outermost group).
+#   - manual_members: each entry is either a bare entity-id (legacy
+#     flat-tile member) or an object `{ entity, group, ... }` for
+#     nested-group members.
+#   - The nested entries' `group` config drives the inner card's
+#     layout — `expansion_mode: inline` flips the compact view in-place,
+#     `popup` opens the full topology in a body-portal overlay.
+#
+# Backwards-compat: existing flat configs (`manual_members:
+# ['light.x', 'light.y']`) keep working — only the object form
+# triggers the recursive embed.
+
+type: custom:everyday-light-card
+entity: light.back
+name: Apartment
+icon: mdi:home-lightbulb
+group:
+  layout: expanded
+  manual_members:
+    - entity: light.hall_spots
+      name: Hall · spots
+      group:
+        layout: expanded
+        full_length_sliders: false
+    - entity: light.kitchen_ceiling_1
+      name: Kitchen ceiling
+      slider:
+        height: 220
+    - entity: light.bathroom_mirror
+      name: Bath · mirror
+      slider:
+        height: 220

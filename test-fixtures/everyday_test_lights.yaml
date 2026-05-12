@@ -1,0 +1,150 @@
+# Everyday test lights — fake light.* entities Stefan can use to verify
+# the everyday-light-card without touching real Hue / smart bulbs.
+#
+# Stefan-2026-05-10 P13-r32: file renamed from `superpro_test_lights.yaml`.
+# The internal `unique_id: superpro_*` keys are intentionally KEPT as-is —
+# changing them would create duplicate entities in HA's registry and break
+# any dashboards already using `light.hall_spot_*`. The unique_id is just
+# an opaque persistence key; HA doesn't surface it to users. Renaming
+# requires deleting the old entities first + re-importing, which is a
+# Stefan-only call (and the rebrand-cleanup doesn't justify it).
+#
+# Layout (exposed entities):
+#   light.hall_spot_1, light.hall_spot_2, light.hall_spot_3   - template lights, brightness + rgb
+#   light.hall_spots                                          - light group of the three
+#
+# Backing store: input_boolean (on/off), input_number (brightness 0-255),
+# input_text (rgb as "r,g,b" string). All three template lights wrap their
+# own helper-trio so set_level / set_rgb mutate state independently.
+#
+# Install (already done by everyday-light-card-dev workspace):
+#   1. /config/packages/everyday_test_lights.yaml ← scp this file there
+#   2. /config/configuration.yaml  homeassistant.packages: !include_dir_named packages
+#   3. ha_check_config → restart HA
+#
+# Removal: delete this file + remove the packages line; restart.
+
+input_boolean:
+  hall_spot_1_state:
+    name: Hall Spot 1 State
+    icon: mdi:lightbulb
+  hall_spot_2_state:
+    name: Hall Spot 2 State
+    icon: mdi:lightbulb
+  hall_spot_3_state:
+    name: Hall Spot 3 State
+    icon: mdi:lightbulb
+
+input_number:
+  hall_spot_1_brightness:
+    name: Hall Spot 1 Brightness
+    min: 0
+    max: 255
+    step: 1
+    initial: 200
+  hall_spot_2_brightness:
+    name: Hall Spot 2 Brightness
+    min: 0
+    max: 255
+    step: 1
+    initial: 180
+  hall_spot_3_brightness:
+    name: Hall Spot 3 Brightness
+    min: 0
+    max: 255
+    step: 1
+    initial: 160
+
+input_text:
+  hall_spot_1_rgb:
+    name: Hall Spot 1 RGB
+    initial: "248,141,42"
+    max: 16
+  hall_spot_2_rgb:
+    name: Hall Spot 2 RGB
+    initial: "120,180,250"
+    max: 16
+  hall_spot_3_rgb:
+    name: Hall Spot 3 RGB
+    initial: "180,100,220"
+    max: 16
+
+light:
+  - platform: template
+    lights:
+      hall_spot_1:
+        unique_id: superpro_hall_spot_1
+        friendly_name: Hall Spot 1
+        value_template: "{{ is_state('input_boolean.hall_spot_1_state', 'on') }}"
+        level_template: "{{ states('input_number.hall_spot_1_brightness') | int(0) }}"
+        rgb_template: "{{ states('input_text.hall_spot_1_rgb').split(',') | map('int') | list }}"
+        turn_on:
+          service: input_boolean.turn_on
+          target: { entity_id: input_boolean.hall_spot_1_state }
+        turn_off:
+          service: input_boolean.turn_off
+          target: { entity_id: input_boolean.hall_spot_1_state }
+        set_level:
+          - service: input_boolean.turn_on
+            target: { entity_id: input_boolean.hall_spot_1_state }
+          - service: input_number.set_value
+            target: { entity_id: input_number.hall_spot_1_brightness }
+            data: { value: "{{ brightness }}" }
+        set_rgb:
+          - service: input_text.set_value
+            target: { entity_id: input_text.hall_spot_1_rgb }
+            data: { value: "{{ r }},{{ g }},{{ b }}" }
+
+      hall_spot_2:
+        unique_id: superpro_hall_spot_2
+        friendly_name: Hall Spot 2
+        value_template: "{{ is_state('input_boolean.hall_spot_2_state', 'on') }}"
+        level_template: "{{ states('input_number.hall_spot_2_brightness') | int(0) }}"
+        rgb_template: "{{ states('input_text.hall_spot_2_rgb').split(',') | map('int') | list }}"
+        turn_on:
+          service: input_boolean.turn_on
+          target: { entity_id: input_boolean.hall_spot_2_state }
+        turn_off:
+          service: input_boolean.turn_off
+          target: { entity_id: input_boolean.hall_spot_2_state }
+        set_level:
+          - service: input_boolean.turn_on
+            target: { entity_id: input_boolean.hall_spot_2_state }
+          - service: input_number.set_value
+            target: { entity_id: input_number.hall_spot_2_brightness }
+            data: { value: "{{ brightness }}" }
+        set_rgb:
+          - service: input_text.set_value
+            target: { entity_id: input_text.hall_spot_2_rgb }
+            data: { value: "{{ r }},{{ g }},{{ b }}" }
+
+      hall_spot_3:
+        unique_id: superpro_hall_spot_3
+        friendly_name: Hall Spot 3
+        value_template: "{{ is_state('input_boolean.hall_spot_3_state', 'on') }}"
+        level_template: "{{ states('input_number.hall_spot_3_brightness') | int(0) }}"
+        rgb_template: "{{ states('input_text.hall_spot_3_rgb').split(',') | map('int') | list }}"
+        turn_on:
+          service: input_boolean.turn_on
+          target: { entity_id: input_boolean.hall_spot_3_state }
+        turn_off:
+          service: input_boolean.turn_off
+          target: { entity_id: input_boolean.hall_spot_3_state }
+        set_level:
+          - service: input_boolean.turn_on
+            target: { entity_id: input_boolean.hall_spot_3_state }
+          - service: input_number.set_value
+            target: { entity_id: input_number.hall_spot_3_brightness }
+            data: { value: "{{ brightness }}" }
+        set_rgb:
+          - service: input_text.set_value
+            target: { entity_id: input_text.hall_spot_3_rgb }
+            data: { value: "{{ r }},{{ g }},{{ b }}" }
+
+  - platform: group
+    name: Hall Spots
+    unique_id: superpro_hall_spots_group
+    entities:
+      - light.hall_spot_1
+      - light.hall_spot_2
+      - light.hall_spot_3

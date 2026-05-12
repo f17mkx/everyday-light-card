@@ -1,0 +1,24 @@
+# Card 2 — Default-parallel 4-axis "make it cozy" tile
+#
+# Real-life: control tile by the door. Walk in, eyeball the room, drag any
+# of the 4 axes (brightness / temperature / hue / saturation) directly.
+# No popups, no mode-switching — every axis is always visible.
+#
+# Long-press the mindmap icon → mode-picker for color-wheel / saved-colors.
+# Double-tap → color-wheel (configurable; see gestures.member_icon).
+
+type: custom:everyday-light-card
+entity: light.main
+default_view_mode: parallel
+parallel_sliders:
+  modes:
+    - brightness
+    - temperature
+    - hue
+    - saturation
+  show_labels: true
+  full_length: false   # 220 px (default; matches expanded-group full_length:false)
+gestures:
+  member_icon:
+    long_press: mode_picker
+    double_tap: color_wheel

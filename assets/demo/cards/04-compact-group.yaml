@@ -1,0 +1,16 @@
+# Card 4 — Compact group (Hall, 3 spots)
+#
+# Real-life: hall has 3 ceiling spots that should always behave as one
+# group, but tile real-estate is precious. Compact layout = single tile
+# with one brightness slider for the entire group + a small mindmap-arm
+# below the slider hinting at the 3 members.
+#
+# Long-press the icon → topology-popup OR inline-expand to N-slider view
+# (configurable via group.expansion_mode; default `inline` per R131).
+# Tap toggles the group with state-restore (per-member brightness preserved).
+
+type: custom:everyday-light-card
+entity: light.hall_spots
+group:
+  layout: compact
+  expansion_mode: inline

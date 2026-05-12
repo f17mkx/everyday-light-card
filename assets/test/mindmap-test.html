@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>everyday-light-card · mindmap-path standalone test</title>
+<style>
+  :root {
+    --bg-navy-deep: #1d1f3a;
+    --bg-card: #2a2c4a;
+    --text-faint: #6b6e8a;
+    --text-dim: #b1b3c8;
+    --shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  }
+  body {
+    margin: 0;
+    padding: 32px 24px;
+    font-family: -apple-system, system-ui, sans-serif;
+    background: linear-gradient(180deg, #14152e 0%, #1d1f3a 100%);
+    color: var(--text-dim);
+    min-height: 100vh;
+    box-sizing: border-box;
+  }
+  h1 {
+    text-align: center;
+    color: #fff;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    margin: 0 0 4px;
+  }
+  .lede {
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+  .scenario {
+    max-width: 1240px;
+    margin: 0 auto 36px;
+  }
+  .scenario h2 {
+    color: var(--text-dim);
+    font-weight: 500;
+    font-size: 14px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 6px;
+    margin-bottom: 18px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+  }
+  .cell {
+    background: var(--bg-navy-deep);
+    border-radius: 24px;
+    padding: 14px 14px 10px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .cell everyday-mindmap-path {
+    width: 100%;
+    max-width: 240px;
+  }
+  .cell .lbl {
+    margin-top: 8px;
+    color: var(--text-dim);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    font-variant-numeric: tabular-nums;
+  }
+  .empty {
+    background: transparent;
+    box-shadow: none;
+  }
+</style>
+</head>
+<body>
+  <h1>mindmap-path</h1>
+  <div class="lede">Phase 4 standalone test · N=1..8 · all-on / mixed / all-off</div>
+
+  <noscript style="display:block;max-width:720px;margin:0 auto 24px;padding:14px 18px;border-radius:14px;background:#5b1212;color:#fff;font-size:13px;line-height:1.4;">
+    JavaScript ist deaktiviert - dieses Test-Harness braucht JS, um den Bundle zu laden und die mindmap-Komponenten zu rendern.
+  </noscript>
+
+  <div id="protocol-warning" hidden style="max-width:720px;margin:0 auto 24px;padding:14px 18px;border-radius:14px;background:#5b3a12;color:#fff;font-size:13px;line-height:1.5;">
+    <strong>Diese Seite wurde via <code style="background:rgba(0,0,0,0.3);padding:1px 6px;border-radius:4px;">file://</code> geöffnet.</strong>
+    Browser blockieren ES-Module-Imports unter <code style="background:rgba(0,0,0,0.3);padding:1px 6px;border-radius:4px;">file://</code> via CORS. Vom Workspace-Root <code>cairo-v1/</code>:
+    <pre style="margin:10px 0 0;padding:10px 12px;background:rgba(0,0,0,0.35);border-radius:8px;overflow-x:auto;">python3 -m http.server 8765 --bind 127.0.0.1
+# danach öffnen: http://localhost:8765/assets/test/mindmap-test.html</pre>
+  </div>
+
+  <section class="scenario">
+    <h2>scenario A — all members on, warm (#f88d2a) at 100% brightness</h2>
+    <div class="grid" id="grid-warm"></div>
+  </section>
+
+  <section class="scenario">
+    <h2>scenario B — mixed: half on (varied colors / brightnesses), half off</h2>
+    <div class="grid" id="grid-mixed"></div>
+  </section>
+
+  <section class="scenario">
+    <h2>scenario C — all off (faint guide rendering)</h2>
+    <div class="grid" id="grid-off"></div>
+  </section>
+
+  <!-- Loads the production bundle exactly as HA does. The mindmap-path
+       customElement is registered as a side-effect of the import. -->
+  <script>
+    // Protocol-detection runs even before the module import (which would
+    // silently fail under file://). Surfaces the cause to anyone who opens
+    // the page directly with a double-click.
+    if (location.protocol === 'file:') {
+      document.getElementById('protocol-warning').hidden = false;
+    }
+  </script>
+
+  <script type="module">
+    import '../../dist/everyday-light-card.js';
+
+    /** @type {Array<[number,number,number]>} */
+    const palette = [
+      [248, 141, 42],   // warm orange
+      [120, 180, 250],  // cool blue
+      [180, 100, 220],  // purple
+      [100, 220, 130],  // green
+      [240, 220, 90],   // yellow
+      [255, 110, 110],  // red
+      [110, 240, 220],  // teal
+      [220, 220, 220],  // white
+    ];
+
+    function makeMembers(n, mode) {
+      return Array.from({ length: n }, (_, i) => {
+        if (mode === 'warm') {
+          return { state: 'on', rgb: [248, 141, 42], brightness: 255 };
+        }
+        if (mode === 'off') {
+          return { state: 'off' };
+        }
+        // mixed: every other member is off; on-members get rotating colors + brightness
+        if (i % 2 === 1) return { state: 'off' };
+        return {
+          state: 'on',
+          rgb: palette[i % palette.length],
+          brightness: 80 + ((i * 53) % 175),
+        };
+      });
+    }
+
+    function buildGrid(rootId, mode) {
+      const root = document.getElementById(rootId);
+      for (let n = 1; n <= 8; n++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        const el = document.createElement('everyday-mindmap-path');
+        // Property assignment skips attribute-string parsing.
+        el.members = makeMembers(n, mode);
+        cell.appendChild(el);
+        const lbl = document.createElement('div');
+        lbl.className = 'lbl';
+        lbl.textContent = `N=${n}`;
+        cell.appendChild(lbl);
+        root.appendChild(cell);
+      }
+    }
+
+    buildGrid('grid-warm', 'warm');
+    buildGrid('grid-mixed', 'mixed');
+    buildGrid('grid-off', 'off');
+  </script>
+</body>
+</html>
