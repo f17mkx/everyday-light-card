@@ -8,11 +8,11 @@
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/f17mkx?style=flat-square&logo=github&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/f17mkx)
 [![Buy Me AI Tokens](https://img.shields.io/badge/Buy%20Me-AI%20Tokens-FFDD00?style=flat-square&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/f17mkx)
 
-![Parallel-axis sliders demo: 4-axis tile with brightness, temperature, hue and saturation. Color-mode switching, group toggle with on/off persistence (scene-snapshot restore)](assets/demos/01-parallel-axis-and-group-toggle.gif)
+![Parallel-axis demo: 4-axis tile with brightness, temperature, hue and saturation rendered side by side. Color-mode switching, group toggle with on/off persistence (scene-snapshot restore).](assets/demos/01-parallel-axis-and-group-toggle.gif)
 
 ## Why this exists
 
-Home Assistant's stock light card and Mushroom give you one slider per light. Works fine for one bulb. Falls apart when you've got a group of 4-8 ceiling spots that should behave as one (and where you occasionally want to control the individual lights). Also no clean way to see at a glance which members are on, switch slider modes without leaving the card, or build a custom mood-color palette right from the dashboard.
+Home Assistant's stock light card and Mushroom give you one slider per light. Works fine for one bulb. Falls apart when you've got a group of 4-8 ceiling spots that should behave as one (and where you occasionally want to control the individual lights too). Also no clean way to see at a glance which members are on, switch slider modes without leaving the card, or build a custom mood-color palette right from the dashboard.
 
 ## What it does
 
@@ -20,16 +20,29 @@ Home Assistant's stock light card and Mushroom give you one slider per light. Wo
 - **All-axis tile**: `default_view_mode: parallel` renders brightness + temperature + hue + saturation as 4 sliders side-by-side. Walk in, eyeball the room, drag any axis. No mode-switching.
 - **Press-drag-select mode picker**: long-press the icon, drag onto one of the 4-diamond picker options, release. Single gesture from idle to specific control. Color wheel blooms from the option you released on.
 - **Double-tap to cycle**: double-tap the icon to cycle through the slider modes.
-- **Color wheel popup**: stepped (21 hues × 6 saturation rings, default) or smooth gradient. Click any sector, light snaps to that hue+sat.
+- **Color wheel**: stepped (21 hues × 6 saturation rings default) or smooth gradient. Configurable down to 6×3 if you want a chunky look. Click any sector, light snaps to that hue+sat.
 - **Saved-colors palette**: 8-cell grid you build by long-press → save current. Persists in HA's native user-data store (zero-config) or your own `input_text` helper.
-- **Effects-list picker**: for gradient strips, scrollable list, tap to apply, edit-mode for drag-reorder + delete. Persists via `input_text` helper so the ordering survives restarts.
 - **Compact-then-expand**: single tile with mindmap-arm hint. Long-press to expand inline (sibling cards reflow) or as a popup.
 - **Runtime gesture rebinding**: map any tap / long-press / press-drag to any mode via config (`gestures.member_icon`, `gestures.group_icon`).
 - **Theme-friendly**: consumes HA token vars (`--paper-item-icon-active-color`, `--state-light-active-color`, `--card-background-color`). Custom theme overrides via `--everyday-*` CSS variables.
 
 ### Popup wheel and double-tap mode cycle
 
-![Popup wheel and double-tap demo: long-press triggers the mode-picker, drag-select onto wheel option opens the color wheel popup. Double-tap cycles brightness ↔ temperature on a single light with parallel sliders](assets/demos/02-popup-wheel-and-double-tap-cycle.gif)
+![Popup wheel and double-tap demo: long-press triggers the mode-picker, drag-select onto wheel option opens the color wheel popup. Double-tap cycles brightness ↔ temperature on a single light with parallel sliders.](assets/demos/02-popup-wheel-and-double-tap-cycle.gif)
+
+### Color wheel variants
+
+![Four color-wheel variants on white background: 21 hues × 6 rings (default), 12 × 4 (simpler), 6 × 3 (chunky), and smooth gradient (continuous conic).](assets/screenshots/wheel-variants-grid.png)
+
+Configure via `color_wheel: { type: stepped, hue_segments: N, saturation_rings: M }` or `color_wheel: { type: smooth }`.
+
+### Apartment topology, expanded
+
+![Apartment topology view, expanded: 14 lights across 4 groups (Kitchen, Bathroom, Hall, Main), each light a vertical pill slider with a group icon beneath, mindmap arms connecting the groups to the apartment root node at the bottom.](assets/screenshots/00-hero-expanded.png)
+
+### Collapsed group to expanded with color-mode popup
+
+![Collapsed group tile gets expanded inline on long-press, color mode is changed through a popup on a member light.](assets/demos/03-collapsed-to-expanded-color-popup.gif)
 
 ## Install (via HACS)
 
@@ -106,7 +119,7 @@ More recipes in [`docs/howto/`](docs/howto/).
 
 - [`docs/INSTALLATION.md`](docs/INSTALLATION.md): HACS + manual install.
 - [`docs/wiki/`](docs/wiki/): per-feature reference (quick-start, config schema, gestures, group-layout, color-wheel, saved-colors).
-- [`docs/howto/`](docs/howto/): apartment-scenario recipes (bedside dimmer, hall group tile, gradient mood, house-off shortcut, nested groups).
+- [`docs/howto/`](docs/howto/): apartment-scenario recipes.
 - [`docs/adr/`](docs/adr/): architecture decisions (popup-portal pattern, gesture detector, mindmap SVG).
 
 ## Support the work
