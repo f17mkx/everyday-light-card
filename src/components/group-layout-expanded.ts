@@ -40,6 +40,7 @@ import type {
   ParallelSlidersConfig,
   EverydayLightCardConfig,
   ManualMember,
+  GestureAction,
 } from '../types/config.js';
 
 import { groupToggleWithRestore } from '../helpers/group-toggle.js';
@@ -198,6 +199,19 @@ export class EverydayGroupLayoutExpanded extends LitElement {
   @property({ type: String, attribute: 'member-tap' }) memberTap: 'none' | 'toggle' | 'classic_more_info' = 'toggle';
 
   /**
+   * Stefan-2026-05-12 R325 (PA-0006): host-supplied double-tap action for
+   * THIS card's group icon (both compact and expanded variants). When unset,
+   * the historical default kicks in (cycle_mode in compact, no-op in
+   * expanded). Configured via the host's `gestures.group_icon.double_tap`
+   * field. Routed in `_runDoubleTapAction` so the same action vocabulary
+   * applies whether the icon is in compact or expanded state. Per-MEMBER
+   * double-tap actions are read directly from `memberConfigs.get(id)?.
+   * gestures?.member_icon?.double_tap` inside `_createMemberPicker`, no
+   * separate property needed.
+   */
+  @property({ attribute: false }) groupDoubleTapAction?: GestureAction;
+
+  /**
    * When true, render the compact view (single group slider + group icon).
    * Long-pressing the group icon toggles `_compactExpanded` to show the
    * full N-slider expanded view in-place.
@@ -224,6 +238,20 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       return (m === 'temperature' || m === 'hue' || m === 'saturation') ? m : 'brightness';
     },
     onTap: () => this._onGroupTap(new Event('synthetic-tap')),
+    // Stefan-2026-05-12 R325 (PA-0006): config-driven double-tap on the
+    // expanded-group icon. Bathroom/Kitchen case from Stefan's nested config
+    // — they render as nested everyday-light-cards, each with its own
+    // expanded layout, and want `color_wheel`/`saved_colors` on group-icon
+    // double-tap. When unset, no double-tap action (preserves pre-R325
+    // expanded-group behaviour where double-tap was a silent no-op).
+    onDoubleTap: () => {
+      const action = this.groupDoubleTapAction;
+      if (!action) return;
+      // Stefan-2026-05-12 R326 (PA-0007 deep-dive): pass captured iconOrigin
+      // so wheel/saved popups bloom from the icon center. captureOrigin()
+      // ran inside the gesture-detector wrapper before this closure fires.
+      this._runDoubleTapAction(this.groupEntityId, action, 'group-expanded', this._expandedGroupPicker.origin);
+    },
     onModePicked: (mode, origin) => {
       this._applyPickerMode(this.groupEntityId, mode as PickerMode, origin, 'group-expanded');
     },
@@ -239,9 +267,21 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       return (m === 'temperature' || m === 'hue' || m === 'saturation') ? m : 'brightness';
     },
     onTap: () => this._onGroupTap(new Event('synthetic-tap')),
+    // Stefan-2026-05-12 R325 (PA-0006): config-driven double-tap on the
+    // compact-group icon. Spots case from Stefan's nested config — a
+    // compact sub-group with `expansion_mode: inline` that wants `expand_inline`
+    // on double-tap (skips the long-press→mindmap picker path). When no
+    // action is configured, falls back to the pre-R325 default
+    // (cycle_mode) so existing user configs keep working.
     onDoubleTap: () => {
-      // Stefan-2026-05-09 R8: cycle the group slider's mode. Reuses
-      // _setMemberMode + _cycleNextMode so the temp-mode auto-apply
+      const action = this.groupDoubleTapAction;
+      if (action) {
+        // Stefan-2026-05-12 R326: pass captured origin for popup anchoring.
+        this._runDoubleTapAction(this.groupEntityId, action, 'group-compact', this._compactGroupPicker.origin);
+        return;
+      }
+      // Stefan-2026-05-09 R8 default: cycle the group slider's mode.
+      // Reuses _setMemberMode + _cycleNextMode so the temp-mode auto-apply
       // side-effect fires here too.
       this._setMemberMode(this.groupEntityId, this._cycleNextMode(this.groupEntityId));
     },
@@ -909,6 +949,26 @@ export class EverydayGroupLayoutExpanded extends LitElement {
           )
           ?? innerGroup?.shadowRoot?.querySelector<HTMLElement>(
             '.topology .tile.group .ic',
+          )
+          // Stefan-2026-05-12 R329 (PA-0008): nested member configured with
+          // `default_view_mode: parallel` doesn't render a group-layout-
+          // expanded child — the parallel-inline render path lives directly
+          // in the embedded everyday-light-card's own shadow root. Fall
+          // through to the parallel-icon variants so the parent's mindmap
+          // arm anchors to the actual icon position instead of the col-
+          // center fallback. `.parallel-compact-icon` is R327's compact
+          // variant; `.parallel-mindmap-icon` is the standard layout.
+          ?? childCard?.shadowRoot?.querySelector<HTMLElement>(
+            '.parallel-compact-icon',
+          )
+          ?? childCard?.shadowRoot?.querySelector<HTMLElement>(
+            '.parallel-mindmap-icon',
+          )
+          // Stefan-2026-05-12 R329 (PA-0008): also handle the bare single-
+          // light embedded path (no parallel, no group). Anchors to
+          // `.single-icon` for completeness.
+          ?? childCard?.shadowRoot?.querySelector<HTMLElement>(
+            '.single-icon',
           )
           ?? null;
       } else {
@@ -2000,13 +2060,19 @@ export class EverydayGroupLayoutExpanded extends LitElement {
         void this.hass.callService('light', 'toggle', { entity_id: id });
       },
       onDoubleTap: () => {
-        // Stefan-2026-05-10 P15.6-r35 (R195): default member-tile double-
-        // tap is now cycle_mode — flip the slider's axis (brightness ↔
-        // temperature ↔ hue ↔ saturation depending on the light's
-        // color_mode + current cycle position). Replaces the previous
-        // wheel-open default. Wheel + saved-colors stay reachable via
-        // long-press → mode-picker. Stefan-Quote: "default für doppel
-        // tap soll sein: Cycle slider mode."
+        // Stefan-2026-05-12 R325 (PA-0006): per-member config-driven double-
+        // tap. Reads `gestures.member_icon.double_tap` from THIS member's
+        // own config (object-form ManualMember in the host's manual_members
+        // array). Falls back to R195 default (cycle_mode) when no action.
+        const memberCfg = this.memberConfigs.get(id);
+        const action = memberCfg?.gestures?.member_icon?.double_tap;
+        if (action) {
+          // Stefan-2026-05-12 R326: pass captured origin for popup anchoring.
+          const picker = this._memberPickers.get(id);
+          this._runDoubleTapAction(id, action, 'member', picker?.origin ?? null);
+          return;
+        }
+        // Default: Stefan-2026-05-10 P15.6-r35 (R195) cycle_mode.
         const newMode = this._cycleNextMode(id);
         this._setMemberMode(id, newMode);
       },
@@ -2018,6 +2084,90 @@ export class EverydayGroupLayoutExpanded extends LitElement {
         if (ctrl) this._closePickersExcept(ctrl);
       },
     });
+  }
+
+  /**
+   * Stefan-2026-05-12 R325 (PA-0006): single dispatch for config-driven
+   * double-tap actions on the group icon AND each member tile. Mirrors the
+   * action vocabulary in `everyday-light-card.ts._handleDoubleTap` (which
+   * only fired on the parallel-inline path) so the same `gestures.*.double_tap`
+   * config field works inside the expanded-group renderer too.
+   *
+   * `entityId` — light entity to act on (group id for group-icon, member
+   * id for member-tile).
+   * `action`   — GestureAction to dispatch.
+   * `variant`  — picker variant for popup-anchor math when the action
+   * routes through `_applyPickerMode`.
+   *
+   * Unhandled actions return without error so unknown values from older
+   * config files degrade silently.
+   */
+  private _runDoubleTapAction(
+    entityId: string,
+    action: GestureAction,
+    variant: PickerVariant,
+    iconOrigin: { x: number; y: number } | null = null,
+  ): void {
+    if (!this.hass || !entityId) return;
+    if (action === 'none') return;
+    if (action === 'toggle') {
+      void this.hass.callService('light', 'toggle', { entity_id: entityId });
+      return;
+    }
+    if (action === 'toggle_with_restore') {
+      if (entityId === this.groupEntityId) {
+        this._onGroupTap(new Event('synthetic-double-tap'));
+      } else {
+        void this.hass.callService('light', 'toggle', { entity_id: entityId });
+      }
+      return;
+    }
+    if (action === 'color_wheel') {
+      // Stefan-2026-05-12 R326 (PA-0007 deep-dive): pass iconOrigin so
+      // _applyPickerMode can compute popupOrigin via pickerDotPosition.
+      // null iconOrigin → null popupOrigin → host's render guard hides the
+      // popup. The picker controller's captureOrigin() runs before our
+      // double-tap closure fires, so `<picker>.origin` is fresh.
+      this._applyPickerMode(entityId, 'wheel', iconOrigin, variant);
+      return;
+    }
+    if (action === 'saved_colors') {
+      this._applyPickerMode(entityId, 'saved', iconOrigin, variant);
+      return;
+    }
+    if (action === 'expand_inline') {
+      if (this.compact) this._compactExpanded = true;
+      return;
+    }
+    if (action === 'expand_inline_parallel') {
+      // Parallel-popup branch anchors via slider-rect lookup (entity-based),
+      // not iconOrigin — so passing null here is fine.
+      this._applyPickerMode(entityId, 'parallel', null, 'member');
+      return;
+    }
+    if (action === 'cycle_mode') {
+      this._setMemberMode(entityId, this._cycleNextMode(entityId));
+      return;
+    }
+    if (action === 'effects_list') {
+      this._applyPickerMode(entityId, 'effects', iconOrigin, variant);
+      return;
+    }
+    if (action === 'classic_more_info') {
+      this.dispatchEvent(
+        new CustomEvent('hass-more-info', {
+          bubbles: true,
+          composed: true,
+          detail: { entityId },
+        }),
+      );
+      return;
+    }
+    if (action === 'mode_picker') {
+      this._applyPickerMode(entityId, 'wheel', iconOrigin, variant);
+      return;
+    }
+    // 'expand_overlay' — legacy topology-popup overlay (not wired here).
   }
 
   private _applyPickerMode(

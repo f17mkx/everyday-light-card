@@ -428,6 +428,12 @@ export class EverydayModePicker extends LitElement {
       position: absolute;
       left: 0;
       top: 0;
+      /* Stefan-2026-05-12 R323 (PA-0004): block mobile scroll-claim on the
+         picker container. The press-drag-select gesture lives entirely inside
+         this 0x0 anchor's absolute-positioned children; without touch-action
+         none the browser's scroll engine claimed touches that drifted onto
+         picker children, killing target-acquisition mid-drag. */
+      touch-action: none;
     }
     .dot {
       position: absolute;
@@ -446,6 +452,13 @@ export class EverydayModePicker extends LitElement {
       cursor: pointer;
       transition: transform 140ms ease-out, box-shadow 140ms ease-out;
       will-change: transform;
+      /* Stefan-2026-05-12 R323 (PA-0004): per-dot guarantee. The bound icon
+         element already declares touch-action none (see group-layout-expanded
+         .tile.member + everyday-light-card .single-icon[data-interactive]),
+         but as the finger moves OFF the icon and ONTO a dot, the dot needs
+         its own declaration or mobile Safari/Chrome reclaim the touch for
+         scrolling and dispatch pointercancel mid-drag. */
+      touch-action: none;
     }
     .dot:hover {
       transform: translate(-50%, -50%) scale(1.08);

@@ -248,6 +248,12 @@ export const POPUP_PORTAL_STYLES = `
     user-select: none;
     touch-action: none;
   }
+  /* Stefan-2026-05-12 R326 (PA-0007 deep-dive): mirror onto group tiles too.
+     Same rationale as .tile.member — bound element must declare touch-action
+     before pointerdown (W3C pointer-events-3 freeze rule). */
+  .everyday-popup-portal .topology-popup-card .tile.group {
+    touch-action: none;
+  }
   .everyday-popup-portal .topology-popup-card .compact-glyph {
     width: 32px;
     height: 32px;

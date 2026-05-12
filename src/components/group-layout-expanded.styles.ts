@@ -379,6 +379,14 @@ export const GROUP_LAYOUT_EXPANDED_STYLES: CSSResult = css`
     .tile.group {
       cursor: pointer;
       user-select: none;
+      /* Stefan-2026-05-12 R326 (PA-0007 deep-dive): bind-target for both
+         _bindExpandedGroupGestures + _bindCompactGestures. touch-action is
+         determined by the browser at the FIRST pointerdown (W3C pointer-
+         events-3 spec, frozen thereafter for the gesture's lifetime). R323's
+         runtime scroll-lock acquired at the 200ms long-press timer fires too
+         late — by then iOS Safari + Android Chromium have already committed
+         to a scroll. Matches .tile.member at line 469. */
+      touch-action: none;
     }
     .tile.group .ic {
       width: 46px;  /* = 2 × DEFAULT_GROUP_R (23) */

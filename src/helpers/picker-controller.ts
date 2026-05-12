@@ -154,6 +154,15 @@ export class PickerController implements ReactiveController {
   savedEditMode = false;
 
   private _origin: { x: number; y: number } | null = null;
+  /**
+   * Stefan-2026-05-12 R326 (PA-0007 deep-dive): public read of the icon-
+   * center captured before tap/long-press/double-tap fires. Used by host
+   * onDoubleTap callbacks (group-layout-expanded.ts._runDoubleTapAction) to
+   * anchor popups (wheel/saved) opened via double-tap to the icon — without
+   * this, _applyPickerMode receives null and the popup's _popupOrigin stays
+   * stale or unset, hiding the popup entirely.
+   */
+  get origin(): { x: number; y: number } | null { return this._origin; }
   private _gestureDispose: (() => void) | null = null;
   private _outsideClickHandler: ((ev: MouseEvent) => void) | null = null;
   /**
@@ -175,11 +184,62 @@ export class PickerController implements ReactiveController {
    * phantom click reliably across mouse and touch (Stefan-2026-05-10 R139).
    */
   private _lastOpenedAt = 0;
+  /**
+   * Stefan-2026-05-12 R323 (PA-0004): true while THIS controller holds the
+   * global scroll-lock. When the picker overlay is open we set
+   * `documentElement.style.touchAction = 'none'` so the browser's touch-scroll
+   * engine never claims a touch mid-drag (the per-element touch-action on the
+   * picker dots is a first line of defense; the global lock catches the case
+   * where the finger drifts off the picker bounds onto an ancestor with
+   * default touch-action). Tracked per-controller so cross-controller
+   * coordination (one picker closes when another opens — see onPickerOpen)
+   * releases-then-acquires cleanly without dropping the lock between.
+   */
+  private _scrollLockSnapshot: string | null = null;
 
   constructor(host: ReactiveControllerHost, opts: PickerControllerOptions) {
     this.host = host;
     this.opts = opts;
     host.addController(this);
+  }
+
+  /**
+   * Stefan-2026-05-12 R323 (PA-0004): central pickerOpen setter so the
+   * scroll-lock side-effect can never go out of sync with the state. Every
+   * spot in this file that flips the picker open/closed must route through
+   * here (not write `this.pickerOpen = ...` directly).
+   */
+  private _setPickerOpen(value: boolean): void {
+    const wasOpen = this.pickerOpen;
+    this.pickerOpen = value;
+    if (value && !wasOpen) this._acquireScrollLock();
+    else if (!value && wasOpen) this._releaseScrollLock();
+  }
+
+  /**
+   * Stefan-2026-05-12 R323 (PA-0004): freeze the page's `touch-action` while
+   * the press-drag-select picker is active. Stefan-Quote PA-0004: "the moving
+   * of the finger to the mode picker item triggers scrolling instead.
+   * Scrolling should be locked when our menu is active (kinda?)". Idempotent:
+   * a second acquire while already locked is a no-op (snapshot is non-null).
+   */
+  private _acquireScrollLock(): void {
+    if (this._scrollLockSnapshot !== null) return;
+    const root = document.documentElement;
+    this._scrollLockSnapshot = root.style.touchAction;
+    root.style.touchAction = 'none';
+  }
+
+  /**
+   * Stefan-2026-05-12 R323 (PA-0004): restore the page's `touch-action` to
+   * whatever it was before this controller acquired the lock. Reads from the
+   * snapshot (not `''`) so we don't clobber a host-page-level rule that
+   * intentionally set touchAction for unrelated reasons.
+   */
+  private _releaseScrollLock(): void {
+    if (this._scrollLockSnapshot === null) return;
+    document.documentElement.style.touchAction = this._scrollLockSnapshot;
+    this._scrollLockSnapshot = null;
   }
 
   hostConnected(): void {
@@ -196,7 +256,7 @@ export class PickerController implements ReactiveController {
         (n) => (n as Element)?.classList?.contains?.('everyday-picker-host'),
       );
       if (insidePicker) return;
-      this.pickerOpen = false;
+      this._setPickerOpen(false);
       this.pickerHover = null;
       this.wheelOpen = false;
       this.savedOpen = false;
@@ -212,6 +272,11 @@ export class PickerController implements ReactiveController {
     }
     this._gestureDispose?.();
     this._gestureDispose = null;
+    // Stefan-2026-05-12 R323 (PA-0004): release the global scroll-lock if we
+    // were holding it. HA view-switches disconnect cards mid-gesture; without
+    // this the documentElement's touchAction would stay frozen on `none` after
+    // the card vanishes, breaking page scrolling until the user reloads.
+    this._releaseScrollLock();
     // Stefan-2026-05-11 P15.6-r63h (R306 / PA-0038): clear `_boundEl` AFTER
     // disposing the gesture listeners. Order matters — dispose first so any
     // in-flight gesture-detector teardown completes against the real element,
@@ -299,10 +364,24 @@ export class PickerController implements ReactiveController {
       doubleTapMs: 500,
       onTap,
       onDoubleTap,
+      // Stefan-2026-05-12 R326 (PA-0007 deep-dive): acquire scroll-lock at
+      // pointerdown (NOT in onLongPress) so `documentElement.style.touchAction
+      // = 'none'` reaches the browser's gesture classifier BEFORE the first
+      // pointermove. Pre-R326 the lock fired ~200ms after pointerdown, by
+      // which time iOS Safari + Android Chromium had already committed to a
+      // scroll-pan. The classifier ignores late mutations per W3C
+      // pointer-events-3 (touch-action chain frozen at gesture start).
+      onPointerDownLock: () => this._acquireScrollLock(),
+      onPointerDownRelease: () => {
+        // Only release if the picker did NOT open. When long-press fires,
+        // _setPickerOpen(true) is a no-op for the lock (it's already held);
+        // the close path releases via _setPickerOpen(false).
+        if (!this.pickerOpen) this._releaseScrollLock();
+      },
       onLongPress: () => {
         captureOrigin();
         this.pickerHover = null;
-        this.pickerOpen = true;
+        this._setPickerOpen(true);
         this._lastOpenedAt = Date.now();
         // Cross-controller coordination hook — host can use this to close
         // other PickerControllers (member-tile-A's picker should close
@@ -338,8 +417,16 @@ export class PickerController implements ReactiveController {
         const hovered = this.pickerHover;
         this.pickerHover = null;
         if (hovered) {
-          this.pickerOpen = false;
+          this._setPickerOpen(false);
           this._applyMode(hovered);
+        } else {
+          // Stefan-2026-05-12 R323 (PA-0004): finger released without landing
+          // on a dot (pointercancel or drag-then-let-go). Pre-R323 the picker
+          // stayed `pickerOpen=true` until outside-click; that's intentional
+          // (gives the user a second tap-chance), so we keep that behaviour
+          // — but ALSO keep the scroll-lock held until the user dismisses.
+          // No state change needed here; the lock release happens in the
+          // outside-click path or hostDisconnected.
         }
         // Keep _origin alive across the long-press → wheel/saved transition
         // so renderWheel/renderSaved can still anchor at the icon. _origin is
@@ -407,7 +494,7 @@ export class PickerController implements ReactiveController {
   private _onModePick = (ev: CustomEvent): void => {
     ev.stopPropagation();
     const mode = (ev.detail?.mode as PickerMode) ?? null;
-    this.pickerOpen = false;
+    this._setPickerOpen(false);
     if (mode) this._applyMode(mode);
     this.host.requestUpdate();
   };
@@ -465,7 +552,7 @@ export class PickerController implements ReactiveController {
     this.host.requestUpdate();
   };
   closePicker = (): void => {
-    this.pickerOpen = false;
+    this._setPickerOpen(false);
     this.pickerHover = null;
     this.host.requestUpdate();
   };

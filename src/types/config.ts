@@ -19,6 +19,14 @@ export type GestureAction =
   | 'saved_colors'
   | 'expand_overlay'
   | 'expand_inline'
+  // Stefan-2026-05-12 R325 (PA-0006): for a LEAF (non-group) member entity,
+  // double-tap opens an inline-style parallel-sliders view (brightness +
+  // temp + ... side-by-side). MVP reuses the existing parallel-popup
+  // mechanism (positioned at the slider rect); a true tile-replace inline
+  // is a follow-up. Stefan-Quote PA-0006: "for boxes there should be an
+  // inline expand option on double tap, that shows the brightness and
+  // temp slider side by side".
+  | 'expand_inline_parallel'
   | 'classic_more_info'
   | 'color_wheel'
   | 'cycle_mode'
@@ -192,6 +200,20 @@ export interface ParallelSlidersConfig {
    *      Use when the card stands alone or needs maximum visual weight.
    *  When `slider.height` is also set, it wins (explicit override). */
   full_length?: boolean;
+  /**
+   * Stefan-2026-05-12 R327 (PA-0008): visual variant for the parallel-inline
+   * card.
+   *   'expanded' (default): full layout with `.parallel-mindmap-area` SVG
+   *     (curve arms + groupDot + orbiting icon overlay) above the sliders.
+   *     Use when the parallel card stands alone as a primary entity tile.
+   *   'compact': drops the mindmap SVG + the orbiting icon. Renders a
+   *     minimal vertical stack: icon → slider-row → caption. Use when
+   *     embedded inside a larger group's topology (parent already provides
+   *     the surrounding mindmap-arms structure).
+   * Stefan-Quote PA-0008: configured as `parallel_sliders: { layout: compact,
+   * modes: [brightness, temperature] }` for `light.hall_boxes_2`.
+   */
+  layout?: 'expanded' | 'compact';
 }
 
 export interface ColorWheelConfig {

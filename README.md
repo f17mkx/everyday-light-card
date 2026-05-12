@@ -1,6 +1,6 @@
 # Everyday Light Card
 
-> A group-aware Lovelace card for Home Assistant. Turn 14 lights into one card with a mindmap topology, in-place color wheel, and saved-colors that persist across reloads.
+> A group-aware Lovelace card for Home Assistant. Mindmap topology between members and master, in-place mode picker, runtime-rotatable gestures, saved-colors edit mode.
 
 [![Version](https://img.shields.io/github/v/release/f17mkx/everyday-light-card?style=flat-square&color=blue)](https://github.com/f17mkx/everyday-light-card/releases)
 [![License: MIT](https://img.shields.io/github/license/f17mkx/everyday-light-card?style=flat-square)](LICENSE)
@@ -8,38 +8,28 @@
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/f17mkx?style=flat-square&logo=github&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/f17mkx)
 [![Buy Me AI Tokens](https://img.shields.io/badge/Buy%20Me-AI%20Tokens-FFDD00?style=flat-square&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/f17mkx)
 
-![Apartment topology view: 14 lights, 4 groups, mindmap arms connecting members to their group icons, group icons connecting up to the apartment root](assets/screenshots/01-hero-apartment-tree-clean.png)
+![Parallel-axis sliders demo: 4-axis tile with brightness, temperature, hue and saturation. Color-mode switching, group toggle with on/off persistence (scene-snapshot restore)](assets/demos/01-parallel-axis-and-group-toggle.gif)
 
 ## Why this exists
 
-Home Assistant's stock light card gives you one light at a time. Mushroom gives you a tile, not a topology. Bubble Card is gorgeous but doesn't model groups. You end up with rows of identical tiles that don't tell you anything about how your apartment is structured.
+Home Assistant's stock light card and Mushroom give you one slider per light. Works fine for one bulb. Falls apart when you've got a group of 4-8 ceiling spots that should behave as one (and where you occasionally want to control the individual lights). Also no clean way to see at a glance which members are on, switch slider modes without leaving the card, or build a custom mood-color palette right from the dashboard.
 
-This card models the actual relationship between lights. Six bedroom lights live under a "Main" group, that group lives under your apartment root, and the visual layout shows it. Tap the apartment to toggle everything. Tap a group to toggle just that group with full state-restore (the snapshot pattern, not just on/off). Long-press any light's icon to swap into color mode, color-temp mode, hue, saturation, or a saved-colors palette without leaving the card.
+## What it does
 
-## Features
-
-- **Mindmap topology**: group icons connect to members via state-reactive SVG bézier curves. Color follows entity state, opacity follows brightness.
-- **In-place mode picker**: long-press a member's icon, drag to one of 4 modes (brightness, temp, color wheel, saved palette). No popup leave, no settings dialog.
-- **Group toggle with state-restore**: tap the group icon, all members go off but their last state is snapshotted as a scene. Tap again, exact restore.
-- **Color wheel**: stepped (21 hues × 6 saturation rings, default) or smooth gradient. Click any sector, light snaps to that hue+sat.
+- **Group control**: show 3-8 lights side-by-side with a mindmap-path connecting them to a master node. Tap toggles the whole group AND restores each member's prior brightness / color on re-on (snapshot via `scene.create`).
+- **All-axis tile**: `default_view_mode: parallel` renders brightness + temperature + hue + saturation as 4 sliders side-by-side. Walk in, eyeball the room, drag any axis. No mode-switching.
+- **Press-drag-select mode picker**: long-press the icon, drag onto one of the 4-diamond picker options, release. Single gesture from idle to specific control. Color wheel blooms from the option you released on.
+- **Double-tap to cycle**: double-tap the icon to cycle through the slider modes.
+- **Color wheel popup**: stepped (21 hues × 6 saturation rings, default) or smooth gradient. Click any sector, light snaps to that hue+sat.
 - **Saved-colors palette**: 8-cell grid you build by long-press → save current. Persists in HA's native user-data store (zero-config) or your own `input_text` helper.
-- **Effects-list picker**: for gradient strips and effect-supporting lights, scrollable list with reorder + delete + restore.
-- **Parallel-axis view**: turn one light into 4 stacked sliders (brightness, temp, hue, sat) for a single "make-it-cozy" tile.
-- **Compact-or-expanded**: `group.layout: compact` shows one consolidated slider + group tile. Long-press the tile, the group expands inline.
+- **Effects-list picker**: for gradient strips, scrollable list, tap to apply, edit-mode for drag-reorder + delete. Persists via `input_text` helper so the ordering survives restarts.
+- **Compact-then-expand**: single tile with mindmap-arm hint. Long-press to expand inline (sibling cards reflow) or as a popup.
 - **Runtime gesture rebinding**: map any tap / long-press / press-drag to any mode via config (`gestures.member_icon`, `gestures.group_icon`).
 - **Theme-friendly**: consumes HA token vars (`--paper-item-icon-active-color`, `--state-light-active-color`, `--card-background-color`). Custom theme overrides via `--everyday-*` CSS variables.
 
-### A group, expanded
+### Popup wheel and double-tap mode cycle
 
-![Main bedroom group expanded: Desk, TV, Mirror in color mode, Bed, Window, Sofa, all six members with their own pill sliders, mindmap arms converging on the Main group icon below](assets/screenshots/02-main-bedroom-group.png)
-
-### One light, parallel-axis
-
-![A single Spot 1 light shown as two parallel sliders side by side, brightness at 27 on the left, color temperature at 218 with a warm orange gradient on the right, light's tile in the center](assets/screenshots/03-single-light-parallel.png)
-
-### Compact and expanded, side by side
-
-![Top card: compact Spots group showing one consolidated slider at 27 and a group tile. Bottom card: expanded Wall 1 / Wall 2 / Mirror group with three vertical pill sliders showing 54, 21, and 99](assets/screenshots/04-compact-and-expanded.png)
+![Popup wheel and double-tap demo: long-press triggers the mode-picker, drag-select onto wheel option opens the color wheel popup. Double-tap cycles brightness ↔ temperature on a single light with parallel sliders](assets/demos/02-popup-wheel-and-double-tap-cycle.gif)
 
 ## Install (via HACS)
 
@@ -87,7 +77,7 @@ parallel_sliders:
   modes: [brightness, temperature, hue, saturation]
 ```
 
-A nested apartment tree (the hero shot above):
+A nested apartment tree:
 
 ```yaml
 type: custom:everyday-light-card

@@ -107,15 +107,25 @@ export function getPickerSlots(
   if (variant !== 'group-expanded') {
     slots.push('cycle');
   }
-  // Stefan-2026-05-11 R290 (PA-14): append mindmap as an additional slot
-  // when the host opted in via `additionalMindmap`. Used by standalone-
-  // compact group cards where the user wants BOTH parallel-popup AND
-  // mindmap-expand as picker options. Adds 1 slot (5 or 6 total). The
-  // angle distribution stays uniform via getPickerAngleMap's `360/n`
-  // formula so the new layout is a pentagon (n=5) or hexagon (n=6).
-  // Skipped when `useMindmap` is already true (avoids double-mindmap).
+  // Stefan-2026-05-11 R290 (PA-14): mindmap as an additional slot when the
+  // host opted in via `additionalMindmap`. Used by standalone-compact group
+  // cards where the user wants BOTH parallel-popup AND mindmap-expand as
+  // picker options. Adds 1 slot (5 or 6 total). Skipped when `useMindmap`
+  // is already true (avoids double-mindmap).
+  //
+  // Stefan-2026-05-12 R330 (PA-0008): mindmap MUST always render at top
+  // (angle 270°) when present. Stefan-Quote: "wenn im Press-drag-select
+  // menü / dem mode picker die mindmap-option verfügbar ist, muss diese
+  // immer oben angezeigt werden". Reorder so mindmap takes index 0 (top
+  // anchor for `getPickerAngleMap`), and the displaced 'parallel' moves
+  // to the end of the slot list. The other slots (saved/effects/wheel/
+  // cycle) keep their relative order — angle distribution is the same
+  // pentagon/hexagon shape, just rotated so mindmap occupies the north
+  // pole. Skipped when `useMindmap` is already true (mindmap already at
+  // top via `topSlot` resolution above).
   if (opts.additionalMindmap && !opts.useMindmap) {
-    slots.push('mindmap');
+    slots[0] = 'mindmap';
+    slots.push('parallel');
   }
   return slots;
 }

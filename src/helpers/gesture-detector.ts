@@ -26,6 +26,25 @@ export interface GestureOptions {
   onLongPress?: (ev: PointerEvent) => void;
   onDoubleTap?: (ev: PointerEvent) => void;
   /**
+   * Stefan-2026-05-12 R326 (PA-0007 deep-dive): fires synchronously inside
+   * `pointerdown`, BEFORE any long-press timer. Use to pre-emptively
+   * acquire scroll-lock at gesture-start — the W3C pointer-events-3 spec
+   * freezes the touch-action chain at the FIRST pointerdown, so mutating
+   * `documentElement.style.touchAction` 200ms later (when long-press fires)
+   * is too late: iOS Safari / Android Chromium have already committed to a
+   * scroll. Pair with `onPointerDownRelease` to drop the lock when the
+   * sequence ends WITHOUT a long-press (regular tap, drag-cancel).
+   */
+  onPointerDownLock?: (ev: PointerEvent) => void;
+  /**
+   * Fires when the pointer sequence ends WITHOUT firing long-press: regular
+   * tap, drag-threshold-exceeded, or pointercancel. Pair with
+   * `onPointerDownLock` to release pre-emptive resource acquisitions. When
+   * long-press DID fire (picker opened), the lock release should happen via
+   * the picker's own close path instead — release is suppressed here.
+   */
+  onPointerDownRelease?: (ev: PointerEvent) => void;
+  /**
    * Fired on every `pointermove` AFTER `onLongPress` has fired. Use this to
    * implement the "press, hold, drag-to-select" gesture - the consumer
    * receives live cursor positions while the user keeps their finger down.
@@ -97,6 +116,11 @@ export function attachGestures(target: HTMLElement, opts: GestureOptions): () =>
     pointerDownAt = Date.now();
     activePointerId = ev.pointerId;
     longPressFired = false;
+    // Stefan-2026-05-12 R326 (PA-0007 deep-dive): acquire scroll-lock at
+    // gesture-start, NOT in the long-press callback. The browser freezes the
+    // touch-action chain at this very pointerdown — late mutations don't
+    // unwind a scroll commit.
+    opts.onPointerDownLock?.(ev);
     if (opts.onLongPress) {
       clearLongPress();
       longPressTimer = window.setTimeout(() => {
@@ -140,12 +164,18 @@ export function attachGestures(target: HTMLElement, opts: GestureOptions): () =>
     clearLongPress();
     if (longPressFired) {
       // Press-drag-select end - fire the end handler with the final pointer
-      // position so the consumer can commit the selection.
+      // position so the consumer can commit the selection. The picker is
+      // open; its close path (mode-pick / outside-click) releases the
+      // R326 scroll-lock via the controller's _setPickerOpen(false).
       opts.onLongPressEnd?.(ev);
       releaseCapture();
       return;
     }
     releaseCapture();
+    // Stefan-2026-05-12 R326: tap-only path (no long-press fired). Release
+    // the pre-emptive scroll-lock so normal page-scroll resumes after the
+    // tap completes.
+    opts.onPointerDownRelease?.(ev);
     const dt = Date.now() - pointerDownAt;
     const dx = ev.clientX - pointerStartX;
     const dy = ev.clientY - pointerStartY;
@@ -181,7 +211,13 @@ export function attachGestures(target: HTMLElement, opts: GestureOptions): () =>
     clearLongPress();
     if (longPressFired) {
       // Treat cancel as end so the consumer can drop any in-progress selection.
+      // The picker's close path will release the R326 scroll-lock.
       opts.onLongPressEnd?.(ev);
+    } else {
+      // Stefan-2026-05-12 R326: cancel before long-press fired (drag, system
+      // gesture, etc.). Release the pre-emptive scroll-lock since no picker
+      // will open.
+      opts.onPointerDownRelease?.(ev);
     }
     longPressFired = false;
     releaseCapture();

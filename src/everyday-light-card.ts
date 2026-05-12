@@ -578,7 +578,12 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
     // so bindIcon(null) cleanly tears down any prior binding.
     const parallelIcon = this.renderRoot.querySelector('.parallel-mindmap-icon') as HTMLElement | null;
     const singleIcon = this.renderRoot.querySelector('.single-icon') as HTMLElement | null;
-    this._picker.bindIcon(parallelIcon ?? singleIcon);
+    // Stefan-2026-05-12 R327 (PA-0008): bind to the compact parallel-icon when
+    // `parallel_sliders.layout: compact` is in effect. Selector order tries
+    // each variant; the first match wins. bindIcon is idempotent so the
+    // double-query is cheap.
+    const parallelCompactIcon = this.renderRoot.querySelector('.parallel-compact-icon') as HTMLElement | null;
+    this._picker.bindIcon(parallelIcon ?? parallelCompactIcon ?? singleIcon);
     // Stefan-2026-05-10 R148: render the picker's wheel + saved popups
     // into the body-portal so they escape HA's transform-ancestor (which
     // would otherwise break position:fixed). The PickerController's
@@ -707,6 +712,7 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
         .groupIconName=${cfg.icon}
         .longPressMs=${cfg.gestures?.long_press_ms ?? 200}
         .memberTap=${'toggle'}
+        .groupDoubleTapAction=${cfg.gestures?.group_icon?.double_tap}
         .wheelType=${cfg.color_wheel?.type === 'smooth' ? 'smooth' : 'stepped'}
         .wheelHues=${cfg.color_wheel?.hue_segments ?? 21}
         .wheelRings=${cfg.color_wheel?.saturation_rings ?? 6}
@@ -867,56 +873,93 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
         rgb,
         brightness: stateObj.attributes.brightness as number | undefined,
       }));
-      return html`
-        <ha-card>
-          <div class="parallel-mindmap-layout">
-            <div class="parallel-slider-row">
-              ${modes.map(
-                (m) => html`
-                  <div class="parallel-inline-col">
-                    ${showLabels ? html`<span class="parallel-inline-lbl">${m}</span>` : null}
-                    <everyday-vertical-pill-slider
-                      style=${`--everyday-slider-height: ${sliderH}px`}
-                      .hass=${this.hass}
-                      .entity=${cfg.entity}
-                      .mode=${m}
-                    ></everyday-vertical-pill-slider>
-                  </div>
-                `,
-              )}
-            </div>
-            <div class="parallel-mindmap-area">
-              <everyday-mindmap-path
-                class="parallel-mindmap-bg"
-                aria-hidden="true"
-                .members=${mindmapMembers}
-                .dotsEnabled=${false}
-                .groupDotEnabled=${true}
-                .groupYOverride=${60}
-                .memberYOverride=${10}
-                .groupOn=${isOn}
-                .groupRgb=${rgb}
-              ></everyday-mindmap-path>
+      // Stefan-2026-05-12 R327 (PA-0008): `parallel_sliders.layout: compact`
+      // drops the curve-bg mindmap SVG and the orbiting icon, rendering
+      // sliders + icon + caption in a minimal vertical stack. Use when
+      // parallel-inline is embedded inside a larger group's topology and
+      // the surrounding mindmap-arms already provide the visual structure.
+      const parallelCompact = cfg.parallel_sliders?.layout === 'compact';
+      const parallelInner = parallelCompact
+        ? html`
+            <div class="parallel-compact-layout">
               <ha-state-icon
-                class="parallel-mindmap-icon ${isOn ? 'active' : ''}"
+                class="parallel-compact-icon ${isOn ? 'active' : ''}"
                 style=${parallelIconStateColor}
+                data-interactive=${cfg.gestures?.member_icon ? 'true' : null}
                 .hass=${this.hass}
                 .stateObj=${stateObj}
                 .icon=${iconName}
               ></ha-state-icon>
-              <div class="parallel-picker">${this._picker.renderPicker()}</div>
+              <div class="single-picker">${this._picker.renderPicker()}</div>
+              <div class="parallel-slider-row">
+                ${modes.map(
+                  (m) => html`
+                    <div class="parallel-inline-col">
+                      ${showLabels ? html`<span class="parallel-inline-lbl">${m}</span>` : null}
+                      <everyday-vertical-pill-slider
+                        style=${`--everyday-slider-height: ${sliderH}px`}
+                        .hass=${this.hass}
+                        .entity=${cfg.entity}
+                        .mode=${m}
+                      ></everyday-vertical-pill-slider>
+                    </div>
+                  `,
+                )}
+              </div>
+              <div class="caption">
+                <span class="name">${labelTitle}</span>
+              </div>
             </div>
-            <div class="caption">
-              <span class="name">${labelTitle}</span>
-              <span class="state">${stateObj.state}</span>
+          `
+        : html`
+            <div class="parallel-mindmap-layout">
+              <div class="parallel-slider-row">
+                ${modes.map(
+                  (m) => html`
+                    <div class="parallel-inline-col">
+                      ${showLabels ? html`<span class="parallel-inline-lbl">${m}</span>` : null}
+                      <everyday-vertical-pill-slider
+                        style=${`--everyday-slider-height: ${sliderH}px`}
+                        .hass=${this.hass}
+                        .entity=${cfg.entity}
+                        .mode=${m}
+                      ></everyday-vertical-pill-slider>
+                    </div>
+                  `,
+                )}
+              </div>
+              <div class="parallel-mindmap-area">
+                <everyday-mindmap-path
+                  class="parallel-mindmap-bg"
+                  aria-hidden="true"
+                  .members=${mindmapMembers}
+                  .dotsEnabled=${false}
+                  .groupDotEnabled=${true}
+                  .groupYOverride=${60}
+                  .memberYOverride=${10}
+                  .groupOn=${isOn}
+                  .groupRgb=${rgb}
+                ></everyday-mindmap-path>
+                <ha-state-icon
+                  class="parallel-mindmap-icon ${isOn ? 'active' : ''}"
+                  style=${parallelIconStateColor}
+                  .hass=${this.hass}
+                  .stateObj=${stateObj}
+                  .icon=${iconName}
+                ></ha-state-icon>
+                <div class="parallel-picker">${this._picker.renderPicker()}</div>
+              </div>
+              <div class="caption">
+                <span class="name">${labelTitle}</span>
+              </div>
             </div>
-            <!-- Stefan-2026-05-10 R148: wheel + saved popups now render
-                 into a body-portal (see updated below) instead of inline
-                 here. HA dashboards transform shadow-root ancestors which
-                 break position fixed for popups mounted inside. -->
-          </div>
-        </ha-card>
-      `;
+          `;
+      // Stefan-2026-05-12 R328 (PA-0008): drop the outer ha-card when embedded.
+      // The parent's nested-member rendering provides the surface; an inner
+      // ha-card paints a second background. Mirrors the group-render branch
+      // pattern at line ~1006 (`if (cfg.embedded) return groupContent`).
+      if (cfg.embedded === true) return parallelInner;
+      return html`<ha-card>${parallelInner}</ha-card>`;
     }
 
     // Auto-detect group membership. layout: 'compact' STILL renders the
@@ -974,6 +1017,7 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
           .groupIconName=${cfg.icon}
           .longPressMs=${longPressMs}
           .memberTap=${memberTap}
+          .groupDoubleTapAction=${cfg.gestures?.group_icon?.double_tap}
           .wheelType=${wheelType}
           .wheelHues=${wheelHues}
           .wheelRings=${wheelRings}
@@ -1172,7 +1216,12 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
             ></everyday-vertical-pill-slider>
             <div class="hpill-caption">
               <span class="name">${label}</span>
-              <span class="state">${stateObj.state}${mode === 'temperature' ? ' · temp' : mode === 'volume' ? ' · vol' : ''}</span>
+              <!-- Stefan-2026-05-12 R324 (PA-0005): drop on/off from state-line.
+                   Keep mode-suffix when mode is not default brightness, since
+                   that conveys real info (which slider axis is active). -->
+              ${mode === 'temperature' || mode === 'volume'
+                ? html`<span class="state">${mode === 'temperature' ? 'temp' : 'vol'}</span>`
+                : ''}
             </div>
           </div>
         </ha-card>
@@ -1222,7 +1271,12 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
               <div class="single-picker">${this._picker.renderPicker()}</div>
             </div>
             <span class="name">${label}</span>
-            <span class="state">${stateObj.state}${mode === 'temperature' ? ' · temp' : mode === 'volume' ? ' · vol' : ''}</span>
+            <!-- Stefan-2026-05-12 R324 (PA-0005): drop on/off from state-line.
+                 Keep mode-suffix when mode is not default brightness, since
+                 that conveys real info (which slider axis is active). -->
+            ${mode === 'temperature' || mode === 'volume'
+              ? html`<span class="state">${mode === 'temperature' ? 'temp' : 'vol'}</span>`
+              : ''}
           </div>
         </div>
       </ha-card>
@@ -1327,6 +1381,38 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       /* P12 R97: position:relative anchor for the wheel-overlay child. */
       position: relative;
     }
+    /* Stefan-2026-05-12 R327 (PA-0008): compact variant of parallel-inline.
+       Drops the .parallel-mindmap-area SVG + orbiting icon. Used for nested
+       embedded members where the surrounding card's mindmap arms already
+       provide topology. Layout: small icon on top, slider-row below, no
+       curve-bg, minimal padding. */
+    .parallel-compact-layout {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      position: relative;
+    }
+    .parallel-compact-icon {
+      --mdc-icon-size: 28px;
+      color: var(--paper-item-icon-color, #c1c1c1);
+      pointer-events: auto;
+      /* R326: bound element + must declare touch-action statically. */
+      touch-action: none;
+    }
+    .parallel-compact-icon.active {
+      color: var(--paper-item-icon-active-color, var(--state-light-active-color, #f88d2a));
+    }
+    .parallel-compact-layout .single-picker {
+      position: absolute;
+      top: 22px;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: auto;
+      z-index: 41;
+      touch-action: none;
+    }
     .parallel-slider-row {
       display: flex;
       flex-direction: row;
@@ -1361,6 +1447,11 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       width: 100%;
       height: 90px;
       flex: 0 0 auto;
+      /* Stefan-2026-05-12 R326 (PA-0007 deep-dive): parent overlay covering
+         the icon + picker dots. Without touch-action none here, finger drifting
+         off .dot back onto this wrapper re-evaluates the chain and unlocks
+         scroll. Belt-and-suspenders with .parallel-mindmap-icon's own rule. */
+      touch-action: none;
     }
     .parallel-mindmap-bg {
       position: absolute;
@@ -1380,6 +1471,13 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       --mdc-icon-size: 26px;
       color: var(--paper-item-icon-color, #c1c1c1);
       pointer-events: auto;
+      /* Stefan-2026-05-12 R326 (PA-0007 deep-dive): parallel-inline bind-target.
+         Per W3C pointer-events-3 spec the touch-action chain is read at first
+         pointerdown and frozen for the gesture's lifetime — R323's late
+         scroll-lock at the 200ms long-press timer can't undo a scroll commit
+         the browser made by the first pointermove. Mirror of .single-icon
+         [data-interactive] declaration. */
+      touch-action: none;
     }
     .parallel-mindmap-icon.active {
       color: var(--paper-item-icon-active-color, var(--state-light-active-color, #f88d2a));
@@ -1503,6 +1601,9 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       transform: translate(-50%, -50%);
       pointer-events: auto;
       z-index: 41;
+      /* Stefan-2026-05-12 R326 (PA-0007 deep-dive): parent overlay covering
+         drag-traversal between dots. Mirror of .parallel-picker. */
+      touch-action: none;
     }
     /* Stefan-2026-05-09 P47-fix R47: horizontal-pill row layout —
        [icon | slider | name+state]. Mirrors the speaker-row mixer card but
@@ -1556,6 +1657,10 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       left: 50%;
       z-index: 41;
       pointer-events: auto;
+      /* Stefan-2026-05-12 R326 (PA-0007 deep-dive): finger drifting between
+         dots crosses this wrapper. Without touch-action none the chain
+         re-evaluates and the browser can claim the touch. */
+      touch-action: none;
     }
     .parallel-picker-backdrop {
       position: fixed;
