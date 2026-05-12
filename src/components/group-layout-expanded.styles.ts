@@ -74,12 +74,20 @@ export const GROUP_LAYOUT_EXPANDED_STYLES: CSSResult = css`
        initial paint visually identical to pre-R299 — no FOUC. The
        dynamic values track the same depth ratios (28:14:8:4:2) scaled
        by container width. */
-    :host([depth='0']) { --member-cols-gap: 28px; }
+    /* Stefan-2026-05-12 R337 (PA-0016): depth-0 == depth-1 (both 14 px).
+       Stefan-Quote: "the gap between Hall door and Main desk should be
+       the same size as the gap between kitchen counter and bathroom
+       mirror" → root-level inter-group boundary == within-Back boundary.
+       Deeper levels (depth 2+) collapse toward the GAP_FLOOR (3 px) for
+       within-deep-group leaves. Mirrors GAP_RATIOS / GAP_MAX_BY_DEPTH in
+       helpers/member-cols-gap.ts. Used only for the pre-measurement first
+       paint; ResizeObserver replaces these once the container is sized. */
+    :host([depth='0']) { --member-cols-gap: 14px; }
     :host([depth='1']) { --member-cols-gap: 14px; }
-    :host([depth='2']) { --member-cols-gap: 8px; }
+    :host([depth='2']) { --member-cols-gap: 7px; }
     :host([depth='3']),
     :host([depth='4']),
-    :host([depth='5']) { --member-cols-gap: 4px; }
+    :host([depth='5']) { --member-cols-gap: 3px; }
     /* Also remove the compact-slider's standalone 260 px override when
        embedded — the embedded compact card lives in a member-col and
        must match the sibling expanded-member sliders, not the
@@ -223,9 +231,17 @@ export const GROUP_LAYOUT_EXPANDED_STYLES: CSSResult = css`
        wants gone. Embedded compact cards still inherit unset from
        the :host([embedded]) rule above, so nested-compact members
        follow the parent layout's sizing. */
+    /* Stefan-2026-05-12 PA-0002: default 220 -> 270 to match the new
+       universal slider default. Uses var(...) with 270 fallback so the
+       host slider.height config still cascades down via the .layout
+       inline-style --everyday-slider-height override set by
+       group-layout-expanded.ts:1621. Pre-PA-0002 the hardcoded 220 here
+       won over the host override - Stefan-Quote (config2.txt repro):
+       slider.height: 270 was silently ignored for compact-collapsed view
+       because of this more-specific rule. */
     .layout.compact .compact-slider-el {
       --everyday-slider-width: 60px;
-      --everyday-slider-height: 220px;
+      --everyday-slider-height: var(--everyday-slider-height, 270px);
     }
     /* Stefan-2026-05-09 P45 R25: when the topology-popup is open, hide the
        compact slider so the popup at the same screen position visually
@@ -428,7 +444,14 @@ export const GROUP_LAYOUT_EXPANDED_STYLES: CSSResult = css`
       position: relative;
       display: flex;
       flex-direction: column;
-      gap: 30px; /* group-row → member-cols, where the mindmap arms live */
+      /* Stefan-2026-05-12 R339 (PA-0016): -20% topology gap (30→24 px) to
+         "stauche die ganze mindmap ein bisschen". Pulls the parent
+         group-icon (Back / Apartment) ~6 px closer to its children below,
+         compressing the overall mindmap vertical envelope. The mindmap-
+         path SVG (CalledRender by .topology > .topology-bg below) recomputes
+         its viewBox + arm geometry off this gap automatically since it
+         inherits from the .topology containing-block height. */
+      gap: 24px; /* group-row → member-cols, where the mindmap arms live */
     }
     .topology > .topology-bg {
       position: absolute;

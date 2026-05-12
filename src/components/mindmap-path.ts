@@ -164,13 +164,22 @@ export class EverydayMindmapPath extends LitElement {
    * Default 10 px (RESPONSIVE_PAD) preserves the compact-mindmap-arm
    * geometry where margin-bottom:-33 pulls the icon-tile to overlap the
    * SVG bottom — the dot at H-10 then merges with the icon visually.
-   * Group-layout-expanded sets this to 41 in the topology-bg context
+   * Group-layout-expanded sets this to 46 in the topology-bg context
    * where the group-row sits at the topology bottom with its .ic
-   * (46 px) centered 41 px above the topology bottom (= half-icon 23 +
-   * 4 gap + 14 label). With offset=41 the dot at H-41 lands on the
-   * icon-center, fixing Stefan's PA-11 complaint that parent group-dots
-   * (Hall, Kitchen, Bathroom, Main) "ist zu weit unten" relative to
-   * their HTML icons.
+   * (46 px) centered 46 px above the topology bottom (= half-icon 23 +
+   * 4 gap + ~19 px label line-height). With offset=46 the dot at H-46
+   * lands on the icon-center, fixing Stefan's PA-11 complaint that
+   * parent group-dots (Hall, Kitchen, Bathroom, Main) "ist zu weit
+   * unten" relative to their HTML icons.
+   *
+   * Stefan-2026-05-12 R345 (PA-0018): EMPIRICAL value verified via
+   * Chrome MCP getBoundingClientRect on /ed-slider/main — `.tile.group`
+   * height = 69 px (.ic 46 + gap 4 + .lbl 19), so .ic-CENTER from
+   * .tile.group-bottom = 46 (not 41 as the original docstring assumed
+   * with .lbl=14). PA-0017 R343 mistakenly changed this 46→41 based on
+   * the docstring's stale .lbl=14 assumption — produced a visible
+   * 6-pixel misalignment Stefan flagged "if anything it is worse now".
+   * Reverted in R345.
    */
   @property({ type: Number, attribute: 'group-icon-offset' }) groupIconOffset = RESPONSIVE_PAD;
 

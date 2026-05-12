@@ -85,8 +85,10 @@ const DEFAULT_SAVED_COLORS: ColorTuple[] = [
  * Picker-mode union — must stay in sync with `mode-picker.ts PickerMode`.
  * Stefan-2026-05-10 P15.6-r35 (R196 + R197): added 'cycle' (next-mode
  * picker slot) and 'effects' (effects-list slot, conditional).
+ * Stefan-2026-05-12 PA-0002 (R2a): added 'collapse' (fold inline-expanded
+ * compact card back; gated to `group-expanded` variant + sticky config).
  */
-type PickerMode = 'temp' | 'wheel' | 'saved' | 'mindmap' | 'parallel' | 'cycle' | 'effects';
+type PickerMode = 'temp' | 'wheel' | 'saved' | 'mindmap' | 'parallel' | 'cycle' | 'effects' | 'collapse';
 
 /**
  * Picker-variant union — must stay in sync with `mode-picker.ts PickerVariant`.
@@ -219,6 +221,38 @@ export class EverydayGroupLayoutExpanded extends LitElement {
   @property({ type: Boolean }) compact = false;
   @state() private _compactExpanded = false;
   /**
+   * Stefan-2026-05-12 PA-0002 (R2a): sticky-expansion flag. When true:
+   *   - `_compactExpanded` is mirrored to localStorage under the key
+   *     `everyday-light-card:expanded:${groupEntityId}`.
+   *   - On mount the card reads the persisted state and restores it.
+   *   - Tap-outside no longer collapses (handled by outside-click handler).
+   *   - The expanded-group picker grows a 'collapse' slot so users can
+   *     fold the topology back via the press-drag-select menu.
+   * Default false (legacy session-only state, outside-click collapses).
+   * Stefan-Quote: "lets make it so, that the expansion state is
+   * remembered. that is better. Pople can choose to for a node ... if
+   * it should be collapsed automatically or not".
+   */
+  @property({ type: Boolean, attribute: 'expansion-sticky' }) expansionSticky = false;
+
+  /**
+   * Stefan-2026-05-12 R334 (PA-0015): runtime visible-leaf-count cache,
+   * keyed by member entityId. Populated by `visible-leaf-count-change`
+   * events bubbled up from embedded `<everyday-light-card>` children
+   * (which in turn aggregate their own inner `<everyday-group-layout-
+   * expanded>` state). Read by `_memberLeafWeight` which prefers the
+   * runtime cache over the static config-based count.
+   *
+   * Effect: when a nested compact child is inline-expanded at runtime
+   * (long-press → mindmap → expand), the child's visible-leaf-count
+   * jumps from 1 → N, the event bubbles to here, the cache updates,
+   * `requestUpdate` fires, and the grid-template-columns redistributes
+   * so the parent's child cols reflect the actual visible-leaf density
+   * at THIS moment. Stefan-Quote PA-0015: "they should be evenly spaced
+   * at each step of the expansion".
+   */
+  @state() private _childVisibleLeafCounts: Map<string, number> = new Map();
+  /**
    * Picker controllers for group-tile + member-tiles (Stefan-2026-05-10
    * P15.5/P15.6). All instantiated up-front; bound via `bindIcon(el|null)`
    * from `updated()` based on which view is on screen. `onPickerOpen` on
@@ -256,6 +290,14 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       this._applyPickerMode(this.groupEntityId, mode as PickerMode, origin, 'group-expanded');
     },
     onPickerOpen: () => this._closePickersExcept(this._expandedGroupPicker),
+    // Stefan-2026-05-12 PA-0002 (R1): effects slot opt-in flag forwarded.
+    effectsInPickerProvider: () => this.effectsInPicker,
+    // Stefan-2026-05-12 PA-0002 (R2a): expose 'collapse' slot when sticky
+    // expansion is on AND the card is currently inline-expanded. Without
+    // this, users on sticky-expansion cards have no way to fold the
+    // topology back (outside-click is suppressed under sticky).
+    hasCollapseProvider: () => this.expansionSticky
+      && ((this.compact && this._compactExpanded) || !this.compact),
   });
   private _compactGroupPicker = new PickerController(this, {
     variant: 'group-compact',
@@ -303,6 +345,8 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     // when both are true). When the card isn't compact at all, neither
     // provider fires and the picker keeps its 4/5-slot default.
     additionalMindmapProvider: () => this.compact && !this.embedded,
+    // Stefan-2026-05-12 PA-0002 (R1): effects slot opt-in flag forwarded.
+    effectsInPickerProvider: () => this.effectsInPicker,
   });
   private _memberPickers = new Map<string, PickerController>();
 
@@ -318,6 +362,14 @@ export class EverydayGroupLayoutExpanded extends LitElement {
    * the active-order per-light is post-launch follow-up.
    */
   @property({ type: Boolean, attribute: 'effects-editable' }) effectsEditable = false;
+  /**
+   * Stefan-2026-05-12 PA-0002 (R1): effects slot in long-press mode-picker
+   * is opt-in. Pre-PA-0002 the slot auto-appeared for any entity reporting
+   * a non-empty effect_list — most color bulbs do, so cards showed the slot
+   * by default. Now defaults `false`. Set `effects_picker.in_picker: true`
+   * in card config to bring it back.
+   */
+  @property({ type: Boolean, attribute: 'effects-in-picker' }) effectsInPicker = false;
   /**
    * Slider-mode persistence across off → on transitions. Default false:
    * a non-brightness mode is reset to brightness when the member light turns
@@ -444,6 +496,22 @@ export class EverydayGroupLayoutExpanded extends LitElement {
    */
   @state() private _topologyAnchorRect: DOMRect | null = null;
   @state() private _parallelAnchorRect: DOMRect | null = null;
+
+  /**
+   * Stefan-2026-05-12 R333 (PA-0015): popup-anchor origin for the parallel-
+   * sliders popup when triggered from the mode-picker. When set, the popup's
+   * bottom-center is positioned at this viewport coord so the popup blooms
+   * out of the picker-dot location (matching the color-wheel / saved-colors
+   * popup anchoring pattern). When null, the legacy slider-rect anchor
+   * (`_parallelAnchorRect`) is used — this is the path for non-picker
+   * triggers like the `expand_inline_parallel` double-tap action that has
+   * no picker-dot coordinate to anchor to.
+   *
+   * Stefan-Quote PA-0015: "the bottom center of the paralell sliders pop up
+   * shall be, where the modepicker icon vanished". Mirrors the wheel +
+   * saved popups which anchor at the picker-dot's viewport position.
+   */
+  @state() private _parallelPopupOrigin: { x: number; y: number } | null = null;
 
   /**
    * Optional Parallel-sliders config — drives which axes appear in the
@@ -665,6 +733,36 @@ export class EverydayGroupLayoutExpanded extends LitElement {
         this._scheduleGapRecompute();
       });
     }
+    // Stefan-2026-05-12 PA-0002 (R2a): restore persisted expansion state
+    // on mount when sticky-expansion is configured. Defensive: only restore
+    // when compact (the expansion only applies to compact-then-inline-expanded
+    // paths). Reads BEFORE the first render so the initial paint already
+    // shows the persisted state — avoids a jarring collapse→expand flash.
+    this._restoreExpansionFromStorage();
+    // Stefan-2026-05-12 R349 (PA-0019): listen for `slider-width-need`
+    // events bubbling up from descendant cards. Each card fires this
+    // event with the smallest slider-width that fits its OWN content;
+    // we take the min across all descendants and apply as our own
+    // override so all sub-trees use the same uniform width. Without
+    // this, when one branch (e.g. bathroom) overflows and shrinks while
+    // a sibling branch (e.g. hall) has space and stays at 60, the
+    // visual is asymmetric — Stefan PA-0019 complaint.
+    this.addEventListener(
+      'slider-width-need',
+      this._onChildSliderNeed as EventListener,
+    );
+    // Stefan-2026-05-13 R352 (PA-0020): listen for `nested-layout-change`
+    // events from embedded children that signal "my layout-shape changed,
+    // remeasure my icon-Y". Used when the child's compact↔expanded toggle
+    // doesn't trigger the per-col ResizeObserver reliably (sub-pixel
+    // height changes). We re-measure synchronously in the same frame so
+    // the parent's mindmap arm catches up to the child's new icon-center
+    // immediately, eliminating the 1-2 frame visual lag Stefan flagged
+    // in PA-0020.
+    this.addEventListener(
+      'nested-layout-change',
+      this._onNestedLayoutChange as EventListener,
+    );
   }
 
   override disconnectedCallback(): void {
@@ -694,6 +792,21 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       this._gapRecomputeRaf = 0;
     }
     this._computedMemberColsGap = undefined;
+    // Stefan-2026-05-12 R349 (PA-0019): tear down sibling-coordination
+    // listener and clear per-child needs map. A fresh mount starts with
+    // empty needs and re-collects from descendants.
+    this.removeEventListener(
+      'slider-width-need',
+      this._onChildSliderNeed as EventListener,
+    );
+    this._childSliderNeeds.clear();
+    this._childMinSliderNeed = undefined;
+    // Stefan-2026-05-13 R352 (PA-0020): tear down nested-layout-change
+    // listener.
+    this.removeEventListener(
+      'nested-layout-change',
+      this._onNestedLayoutChange as EventListener,
+    );
     // Stefan-2026-05-11 P15.6-r63e (R302 / PA-0032): clear the bound-ids
     // guard so a fresh mount (e.g. HA dashboard view-switch destroys + re-
     // creates the card DOM) gets a forced rebind in the next updated()
@@ -728,6 +841,25 @@ export class EverydayGroupLayoutExpanded extends LitElement {
    *  which is the common case. Descendants of this card inherit the
    *  override; siblings under the same parent are unaffected. */
   @state() private _computedSliderWidthOverride?: number;
+  /** Stefan-2026-05-12 R349 (PA-0019): minimum slider-width need broadcast
+   *  by descendant cards via `slider-width-need` events. Tracked per child-
+   *  entity in `_childSliderNeeds`; we keep the GLOBAL min (across all
+   *  descendants) here as a single number for fast effective-width lookup.
+   *  Rationale: when one branch of the tree (e.g. bathroom inside back's
+   *  apartment view) detects overflow and shrinks to 48 px, all OTHER
+   *  branches (kitchen + hall) currently keep their default 60 px because
+   *  their own `.member-cols` doesn't overflow. Result: visually-mismatched
+   *  slider widths across the same parent — Stefan's PA-0019 complaint
+   *  "all sliders become smaller width, except the sliders in the same
+   *  group as spots". Fix: every card listens for descendants' shrinks and
+   *  applies the GLOBAL MIN as its own override, which cascades to all
+   *  descendants via CSS-var. Stable: the bottleneck child's min always
+   *  fits everywhere (by definition of min); after one rAF the tree
+   *  converges. */
+  @state() private _childMinSliderNeed?: number;
+  /** Per-child entity → smallest slider-width-need they reported.
+   *  `_childMinSliderNeed = min(values)`. Cleared on disconnect. */
+  private _childSliderNeeds = new Map<string, number>();
   /** Stefan-2026-05-12 R299: separate RO for the `.member-cols` parent
    *  container (singular). Watches THIS card's container-width to
    *  recompute the gap. Disjoint from `_memberColRO` (plural, watches
@@ -737,8 +869,101 @@ export class EverydayGroupLayoutExpanded extends LitElement {
   /** rAF handle for coalescing burst RO callbacks during animations. */
   private _gapRecomputeRaf = 0;
 
+  /**
+   * Stefan-2026-05-12 PA-0002 (R2a): localStorage key for the persisted
+   * inline-expanded state of a sticky-expansion compact group. One key per
+   * group entity so nested cards / sibling cards persist independently.
+   * Read by `_restoreExpansionFromStorage` (called from connectedCallback)
+   * and written by `_persistExpansionToStorage` (called from updated()
+   * when `_compactExpanded`/`groupEntityId`/`expansionSticky` change).
+   *
+   * Returns null when storage is unavailable (private browsing, quota
+   * exceeded) or when `groupEntityId` isn't set — the helpers no-op in
+   * that case so the card falls back to legacy session-only behaviour.
+   */
+  private _expansionStorageKey(): string | null {
+    if (!this.groupEntityId) return null;
+    return `everyday-light-card:expanded:${this.groupEntityId}`;
+  }
+
+  /**
+   * Stefan-2026-05-12 PA-0002 (R2a): read persisted state on mount when
+   * sticky-expansion is configured. Defensive: swallows any storage
+   * exception (private browsing, denylist) and leaves state at its
+   * default `false`. Only applies to compact cards — non-compact cards
+   * are always expanded and don't have a "collapsed" state to persist.
+   */
+  private _restoreExpansionFromStorage(): void {
+    if (!this.expansionSticky || !this.compact) return;
+    const key = this._expansionStorageKey();
+    if (!key) return;
+    try {
+      const v = window.localStorage.getItem(key);
+      if (v === '1') this._compactExpanded = true;
+      else if (v === '0') this._compactExpanded = false;
+    } catch {
+      // Storage unavailable — fall back to legacy session-only behaviour.
+    }
+  }
+
+  /**
+   * Stefan-2026-05-12 PA-0002 (R2a): write the current state to localStorage
+   * under the per-entity key. Skipped when sticky-expansion is off (the
+   * legacy session-only mode shouldn't leave persisted artifacts behind).
+   * Also skipped for non-compact cards. Defensive: swallows storage
+   * exceptions like the read helper.
+   */
+  private _persistExpansionToStorage(): void {
+    if (!this.expansionSticky || !this.compact) return;
+    const key = this._expansionStorageKey();
+    if (!key) return;
+    try {
+      window.localStorage.setItem(key, this._compactExpanded ? '1' : '0');
+    } catch {
+      // Storage write failed (quota or private mode) — best effort.
+    }
+  }
+
   protected override updated(changed: PropertyValues): void {
     super.updated(changed);
+    // Stefan-2026-05-12 PA-0002 (R2a): restore on first updated AFTER
+    // the `expansionSticky` / `compact` / `groupEntityId` props have all
+    // landed. connectedCallback() may run before properties are set
+    // (Lit binds props in a microtask), so the connectedCallback restore
+    // may have run with stale defaults. This re-run catches up.
+    if (
+      (changed.has('expansionSticky') || changed.has('compact') || changed.has('groupEntityId'))
+      && this.expansionSticky && this.compact
+    ) {
+      this._restoreExpansionFromStorage();
+    }
+    // Stefan-2026-05-12 R334 (PA-0015): dispatch our aggregated visible-
+    // leaf-count whenever a state that affects it changes. The event
+    // bubbles to our embedding parent's `<everyday-light-card>` listener
+    // (registered via `@visible-leaf-count-change` on the embedded card
+    // in `_renderMember`). The parent's `_onChildVisibleLeafCountChange`
+    // caches our count, triggers `requestUpdate`, and re-renders with
+    // updated gridTemplateColumns reflecting our new visible-leaf-count.
+    //
+    // composed:true crosses the shadow-DOM boundary so the listener on
+    // the OUTER `<everyday-light-card>` element receives it (the
+    // intermediate `<everyday-light-card>` host re-emits via natural
+    // bubbling on composed events). The event is idempotent — the
+    // parent's handler dedupes by checking the cached prev count.
+    const vlcAffected =
+      changed.has('_compactExpanded') ||
+      changed.has('_childVisibleLeafCounts') ||
+      changed.has('memberIds') ||
+      changed.has('compact');
+    if (vlcAffected) {
+      this.dispatchEvent(
+        new CustomEvent('visible-leaf-count-change', {
+          bubbles: true,
+          composed: true,
+          detail: { count: this._currentVisibleLeafCount() },
+        }),
+      );
+    }
     // Rebind ONLY when the member-id CONTENT changes (entities added/
     // removed). resolveGroup() returns a new array reference every render,
     // so reference-based change-detection would rebind on every hass push -
@@ -871,6 +1096,15 @@ export class EverydayGroupLayoutExpanded extends LitElement {
           this._memberModes = {};
         }
       }
+      // Stefan-2026-05-12 PA-0002 (R2a): persist the expansion state to
+      // localStorage whenever it changes (or when the entity id changes
+      // — covers the case where a card config edit reassigns the group
+      // mid-mount). Only persists under sticky-expansion config; no-op
+      // for legacy session-only mode. Idempotent: writes the same key
+      // on every update so a sticky-toggle flip catches up instantly.
+      if (changed.has('_compactExpanded') || changed.has('groupEntityId') || changed.has('expansionSticky')) {
+        this._persistExpansionToStorage();
+      }
     }
     if (
       changed.has('_wheelTarget') ||
@@ -907,6 +1141,7 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       changed.has('_effectsTarget') ||
       changed.has('_topologyPopupOpen') ||
       changed.has('_parallelSlidersTarget') ||
+      changed.has('_parallelPopupOrigin') ||
       changed.has('_popupOrigin') ||
       changed.has('_savedColors') ||
       changed.has('_savedColorsEditing') ||
@@ -1138,8 +1373,88 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       if (gapChanged) this._computedMemberColsGap = resolved.gap;
       if (overrideChanged) this._computedSliderWidthOverride = resolved.sliderOverride;
       if (gapChanged || overrideChanged) this.requestUpdate();
+      // Stefan-2026-05-12 R349 (PA-0019): broadcast this card's slider-width
+      // need so siblings + ancestors can adopt the smallest one for visual
+      // uniformity. We always fire (not just on change) because a sibling
+      // may have just connected and missed the change-edge. Detail.width is
+      // the SMALLEST width that fits THIS card's content with floor-gap; if
+      // resolveOverflow returned no override, the baseline already fits so
+      // we report the baseline (= 60 in the common case). Non-bubbling
+      // listener at the parent level catches this without leaking past the
+      // top-level card. composed: true is required to cross shadow roots
+      // (each embedded card has its own shadow root).
+      const ownNeed = resolved.sliderOverride ?? baselineSliderWidth;
+      if (this.groupEntityId) {
+        this.dispatchEvent(new CustomEvent('slider-width-need', {
+          detail: { entity: this.groupEntityId, width: ownNeed },
+          bubbles: true,
+          composed: true,
+        }));
+      }
     });
   }
+
+  /**
+   * Stefan-2026-05-13 R352 (PA-0020): listener for embedded children's
+   * `nested-layout-change` events. Re-measure icon Y positions
+   * synchronously so the parent's mindmap arm catches up to the child's
+   * new layout in the SAME frame as the child's re-render — instead of
+   * waiting for the per-col ResizeObserver which fires async (1-2 frames
+   * late) and sometimes not at all when col-height delta is sub-pixel.
+   *
+   * Stefan-Quote PA-0020: "the mindmap node, dot and arm for Hall takes
+   * some time to find its place (the mindmap adjustment isnt instant)".
+   *
+   * Schedule TWO re-measures: one immediately (catches the post-toggle
+   * state if Lit synchronously committed) and one after a microtask
+   * (catches the more-likely case where Lit's batching defers the DOM
+   * commit by one tick). The double-call is cheap (just rect reads) and
+   * idempotent (the changed-check inside `_measureNestedIconYs` skips
+   * redundant updates).
+   */
+  private _onNestedLayoutChange = (_ev: Event): void => {
+    // Don't recompute for our own children if we don't track them
+    if (!this.memberConfigs || this.memberConfigs.size === 0) return;
+    this._measureNestedIconYs();
+    // Defer one tick so the embedded child's re-render is committed
+    // before we read its bounding-rect again.
+    queueMicrotask(() => this._measureNestedIconYs());
+    // Belt-and-suspenders: also schedule on next animation frame to
+    // catch the post-layout-paint state when CSS transitions are involved.
+    requestAnimationFrame(() => this._measureNestedIconYs());
+  };
+
+  /**
+   * Stefan-2026-05-12 R349 (PA-0019): listener for descendant cards'
+   * `slider-width-need` events. Tracks per-child need in
+   * `_childSliderNeeds`, recomputes global min, and applies as
+   * `_childMinSliderNeed` (consumed in `effectiveSliderWidth` at render).
+   * The min cascades down via `--everyday-slider-width` so all branches
+   * of this sub-tree converge to the bottleneck child's width — fixes
+   * the "bathroom shrinks but hall doesn't" asymmetry.
+   *
+   * Skip own events (composed:true bubbling reaches even the originating
+   * element). Drop child-needs that report >= 60 from the min calc since
+   * those don't constrain anything (60 is the universal default; a child
+   * reporting it isn't asking for anything narrower).
+   */
+  private _onChildSliderNeed = (ev: Event): void => {
+    const detail = (ev as CustomEvent).detail as { entity?: string; width?: number } | undefined;
+    if (!detail || !detail.entity || typeof detail.width !== 'number') return;
+    if (detail.entity === this.groupEntityId) return;
+    const prev = this._childSliderNeeds.get(detail.entity);
+    if (prev !== undefined && Math.abs(prev - detail.width) < 0.5) return;
+    this._childSliderNeeds.set(detail.entity, detail.width);
+    // Recompute global min across ALL tracked descendants.
+    let min: number | undefined;
+    for (const w of this._childSliderNeeds.values()) {
+      if (w < 60 && (min === undefined || w < min)) min = w;
+    }
+    if (min !== this._childMinSliderNeed) {
+      this._childMinSliderNeed = min;
+      this.requestUpdate();
+    }
+  };
 
   /**
    * Render the body-portal popups imperatively. Up to FOUR popup types
@@ -1352,8 +1667,10 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       'transform: translateY(-100%)',
     ].join('; ');
 
+    // Stefan-2026-05-12 PA-0002: full_length 260 → 270 to track new
+    // universal default. Equal to the default now, kept for back-compat.
     const sliderHeightOverride = this.fullLengthSliders
-      ? `--everyday-slider-height: 260px;`
+      ? `--everyday-slider-height: 270px;`
       : '';
 
     return html`
@@ -1420,17 +1737,36 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     // compact card-height (group-icon Y-from-top stays constant). Empirical
     // overhead ~120 px (mindmap-bg + member-tile + group-row + gaps). User
     // can still override via explicit `slider.height` config.
+    //
+    // Stefan-2026-05-12 PA-0002: expand_in_place base bumped 220 → 270
+    // (so when fixed-card-size is on + compact + expanded, the children
+    // are 270 - 120 = 150 px instead of 100 px). Stefan-Quote: "the
+    // sliders that appear will be shorter in length because the child
+    // icons and the mindmap will take some space as well" — 150 px is
+    // a more usable shortening than 100 px and tracks the new universal
+    // 270 default. full_length:true case 260 → 270 (semantic: "match
+    // host"; new host default is 270).
+    //
+    // Stefan-2026-05-12 R346 (PA-0018): default bumped 220 → 270 to match
+    // single-light + parallel-inline (every other render path uses 270 as
+    // the universal default after PA-0002). Stefan-Quote PA-0018: "die
+    // slider hier müssen auch alle die volle länge haben wie es auch bei
+    // dieser config der fall ist [single-light]". The R184-era 220 default
+    // was a "shorter than host to leave mindmap room" compromise that's no
+    // longer wanted — Stefan wants visual parity with single-light cards.
+    // `full_length_sliders` flag still reads 270 (kept as backwards-compat
+    // no-op alias). `expand_in_place + compact + _compactExpanded` chain
+    // unchanged (still 150 px so the card stays the pre-expand height).
     // Resolution priority:
     //   1. explicit this.sliderHeight prop wins (user override)
-    //   2. expandInPlace + compact + _compactExpanded → 220 - 120 = 100 px
-    //   3. full_length_sliders=true → 260 px
-    //   4. otherwise → 220 px (R184)
+    //   2. expandInPlace + compact + _compactExpanded → 270 - 120 = 150 px
+    //   3. otherwise → 270 px (universal default since R346)
     const EXPAND_IN_PLACE_TOPOLOGY_OVERHEAD = 120;
     const isInlineExpandedCompact = this.compact && this._compactExpanded;
     const effectiveSliderHeight = this.sliderHeight
       ?? (this.expandInPlace && isInlineExpandedCompact
-        ? Math.max(80, 220 - EXPAND_IN_PLACE_TOPOLOGY_OVERHEAD)
-        : (this.fullLengthSliders ? 260 : 220));
+        ? Math.max(80, 270 - EXPAND_IN_PLACE_TOPOLOGY_OVERHEAD)
+        : 270);
 
     // Stefan-2026-05-11 R254: standalone non-nested layouts have a
     // calibrated min-height (~380 px) where the icons land at known
@@ -1443,7 +1779,24 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     // variable height, so absolute SVG coords drift.
     const sliderDelta = (effectiveSliderHeight ?? 170) - 170;
     const isTop = this.iconPosition === 'top';
-    const GROUP_DOT_Y = isTop ? 30 : (288 + sliderDelta);
+    // Stefan-2026-05-12 R348 (PA-0018): GROUP_DOT_Y base 288 → 282 to fix
+    // a persistent 6 px misalignment between the SVG group-dot and the
+    // HTML group-icon center on standalone (non-nested, non-embedded)
+    // group cards. Stefan-Quote PA-0018: "Main icon and mindmap-dot are
+    // still not visually aligned. If anything it is worse now". Empirical
+    // measurement on /ed-slider/main via Chrome MCP getBoundingClientRect:
+    // .tile.group height = 69 px (.ic 46 + gap 4 + .lbl ~19), so
+    // .ic-CENTER from .topology-bottom = 46, but the formula was placing
+    // the SVG dot at 40 from .topology-bottom (288 + 100 sliderDelta = 388
+    // in SVG coords, with topology-height ~428 → 428 − 388 = 40 from bot).
+    // The 6-px gap was constant across slider heights (icon and dot moved
+    // in lock-step but the dot was always 6 px below the icon). 282 puts
+    // the dot at 46 from topology-bottom, matching the icon-center exactly.
+    // PA-0017 R343/R345 changed `group-icon-offset` from 46 → 41 → 46 but
+    // those edits have NO effect on this codepath because `useResponsive
+    // Coords` is false for non-nested cards — `groupYOverride = GROUP_
+    // DOT_Y` (hardcoded) wins over `_H - groupIconOffset` (responsive).
+    const GROUP_DOT_Y = isTop ? 30 : (282 + sliderDelta);
     const MEMBER_ICON_CENTER_Y = isTop ? (92 + sliderDelta) : (195 + sliderDelta);
     // Stefan-2026-05-12 P15.6 R299 (PA-0041): TILE_GRID_GAP threads the
     // SAME value as the visual --member-cols-gap so mindmap arms stay
@@ -1498,30 +1851,20 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     // da", "Hall gaps größer wie bei anderen groups"). Counting all leaves
     // shrinks the slider to fit the outer card so fr-distribution stays
     // proportional at every level. Bare-string members count as 1.
-    const totalLeafCount = this.memberIds.reduce(
-      (sum, id) => sum + this._memberLeafWeight(id),
-      0,
-    );
-    // Stefan-2026-05-11 R291 (PA-14): bump the slider-width floor from
-    // 24 → 40 px. The 14-leaf apartment view was settling at 24 px after
-    // R276, which Stefan flagged as way too skinny — "make them the
-    // regular width. it will probably be fine". The Math.max floor still
-    // lets the formula shrink gracefully on mid-sized groups (6-9 leaves
-    // settle at 41-44 px) but caps the minimum at a comfortably-tappable
-    // 40 px. May overflow on very narrow outer cards with 14+ leaves —
-    // acceptable tradeoff since the alternative (24 px) was visually
-    // broken.
-    // Stefan-2026-05-11 P15.6-r63d (R300a / PA-0031): slope start bumped
-    // from 47 → 60 px to match the compact-slider width (option B). Slope
-    // -4 px/leaf beyond 5 leaves so the apartment view's 14 leaves still
-    // land near the 40 px floor: 60 - (14-5)*4 = 24 → clamp 40. Mid-range
-    // groups (e.g. Spots with 7 leaves) land at 52 px; standard 5-leaf
-    // groups (Hall) at 60 px. Compact ↔ expanded width parity for small
-    // groups; gradual shrink for many-leaf groups.
+    // Stefan-2026-05-12 R335 (PA-0003): drop the eager leaf-count slope.
+    // Stefan-Quote PA-0003: "The width of the sliders should only be
+    // touched if the card runs out of space horizontally". Pre-R335 we
+    // shrank the slider proactively at totalLeafCount > 5 (slope
+    // -4 px/leaf down to a 40 px floor), which made wide cards with many
+    // leaves render thin sliders even though they had space. Post-R335
+    // the default is the full 60 px; ANY narrowing only happens through
+    // `resolveOverflow`'s `sliderOverride` path (R319-R322), which kicks
+    // in only when `n * 60 + (n-1) * gapFloor > containerWidth`. User's
+    // explicit `slider.width` config still wins via `this.sliderWidth`.
+    // Embedded cards continue to inherit the parent's cascaded
+    // `--everyday-slider-width` (unchanged from R264 behavior).
     const responsiveSliderWidth = this.sliderWidth
-      ?? (this.embedded
-        ? undefined
-        : (totalLeafCount <= 5 ? 60 : Math.max(40, 60 - (totalLeafCount - 5) * 4)));
+      ?? (this.embedded ? undefined : 60);
     // Stefan-2026-05-11 R253: when the card has nested members with
     // varying subtree-depths, equal 1fr columns give uneven entity
     // density — Back (8 leaves) and Main (6 leaves) each got 50% width
@@ -1543,14 +1886,27 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     // overlap (resolveOverflow detected `n*baseline + (n-1)*floorGap > cw`).
     // Override takes precedence over `responsiveSliderWidth` so the
     // overflow-resolution always wins. Descendants of this card inherit
-    // the override via CSS-var cascade; siblings under the same parent
-    // are unaffected (their own .layout writes their own cascaded value).
-    // Stefan-Spec PA-0044: "only the expanded sliders width is reduced
-    // (if possible)" — compact cards never reach this code path (no
-    // .member-cols measurement) so the override is expanded-only by
-    // construction.
-    const effectiveSliderWidth = this._computedSliderWidthOverride
-      ?? responsiveSliderWidth;
+    // the override via CSS-var cascade.
+    // Stefan-2026-05-12 R349 (PA-0019): now ALSO factors in
+    // `_childMinSliderNeed` — the smallest width any descendant card
+    // reported via `slider-width-need` events. Min(own, descendant-min)
+    // becomes the effective override so all branches of the sub-tree
+    // converge to the same uniform width. Pre-r67 only `siblings under
+    // the same parent` saw the override via cascade; descendants in
+    // ANOTHER branch (e.g. hall-with-spots while bathroom shrunk) kept
+    // their default 60. With min-coordination, hall-and-bathroom both
+    // see the min (=48) and the apartment view stays visually uniform.
+    const overrideCandidates: number[] = [];
+    if (this._computedSliderWidthOverride !== undefined) {
+      overrideCandidates.push(this._computedSliderWidthOverride);
+    }
+    if (this._childMinSliderNeed !== undefined) {
+      overrideCandidates.push(this._childMinSliderNeed);
+    }
+    const minOverride = overrideCandidates.length > 0
+      ? Math.min(...overrideCandidates)
+      : undefined;
+    const effectiveSliderWidth = minOverride ?? responsiveSliderWidth;
     const sizeOverrides = [
       `--member-count: ${n}`,
       effectiveSliderWidth !== undefined
@@ -1676,6 +2032,8 @@ export class EverydayGroupLayoutExpanded extends LitElement {
                   .config=${childConfig}
                   .embedded=${true}
                   .depth=${this.depth + 1}
+                  @visible-leaf-count-change=${(ev: Event) =>
+                    this._onChildVisibleLeafCountChange(id, ev)}
                 ></everyday-light-card>
               </div>
             `;
@@ -1856,7 +2214,11 @@ export class EverydayGroupLayoutExpanded extends LitElement {
   private _renderParallelSlidersPopup(): TemplateResult {
     const target = this._parallelSlidersTarget;
     const r = this._parallelAnchorRect;
-    if (!target || !r) return html``;
+    // Stefan-2026-05-12 R333 (PA-0015): prefer the picker-dot origin when
+    // present. Fallback to slider-rect for non-picker triggers (see
+    // _applyPickerMode parallel branch).
+    const origin = this._parallelPopupOrigin;
+    if (!target || (!origin && !r)) return html``;
 
     // Stefan-2026-05-12 P15.6-r63i (R307 / PA-0039): default OFF.
     // Pre-r63i was `!== false` → labels ON by default. Stefan-Quote:
@@ -1868,8 +2230,10 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     // inline both default to 220 via vertical-pill-slider :host fallback;
     // see group-layout-expanded.styles.ts:223 and everyday-light-card.ts:729).
     // Stefan-Quote: "the paralell slider pop ups sliders should have the
-    // same slider length as its parent". fullLengthSliders=true keeps 260.
-    const sliderHeightPx = this.fullLengthSliders ? 260 : 220;
+    // same slider length as its parent". Stefan-2026-05-12 PA-0002: bumped
+    // universal default 220 → 270 (and full-length alias 260 → 270 for
+    // backwards compat — equal to the new default).
+    const sliderHeightPx = this.fullLengthSliders ? 270 : 270;
 
     // Stefan-2026-05-12 R332 (PA-0012): `parallel_sliders.layout: compact`
     // means "brightness slider only" — for the popup variant, collapse the
@@ -1897,21 +2261,37 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     // the popup is now narrower than the card — clicks inside the card
     // but outside the popup are now legitimately "outside".
     const popupWidth = Math.max(160, popupModes.length * 82 + 20);
-    // Stefan-2026-05-09 P46 R27+R28a + P47 R31a: scroll-aware + bottom-
-    // anchor at the SLIDER's bottom-edge (NOT the labels — labels go above).
-    const popupStyle = [
-      'position: absolute',
-      // X-axis: centred on the original slider.
-      `left: ${r.left + window.scrollX + r.width / 2 - popupWidth / 2}px`,
-      // Y-axis: doc-y of the slider's bottom-edge. translateY(-100%) shifts
-      // popup up by its own height so its bottom-edge sits at this y. The
-      // popup-card's content is laid out so the SLIDERS sit at popup-bottom
-      // (labels above), giving slider-bottom = original-slider-bottom.
-      `top: ${r.bottom + window.scrollY}px`,
-      `width: ${popupWidth}px`,
-      `min-height: ${r.height}px`,
-      'transform: translateY(-100%)',
-    ].join('; ');
+    // Stefan-2026-05-12 R333 (PA-0015): popup positioning has two paths:
+    //   - origin (picker-dot): bottom-center of popup anchored at the dot
+    //     coord, so the popup blooms from where the user released the
+    //     parallel-icon. Matches wheel/saved popup convention.
+    //   - r (slider-rect fallback): legacy P45-R26a anchor — bottom-edge
+    //     aligns with the slider's bottom-edge, x-centered on slider.
+    //     Used by non-picker triggers (expand_inline_parallel double-tap).
+    const popupStyle = origin
+      ? [
+          'position: absolute',
+          // X-axis: centred on the picker-dot.
+          `left: ${origin.x + window.scrollX - popupWidth / 2}px`,
+          // Y-axis: dot's doc-y. translateY(-100%) lifts popup so its
+          // bottom-edge sits at this y, giving popup-bottom-center = dot.
+          `top: ${origin.y + window.scrollY}px`,
+          `width: ${popupWidth}px`,
+          'transform: translateY(-100%)',
+        ].join('; ')
+      : [
+          'position: absolute',
+          // X-axis: centred on the original slider.
+          `left: ${r!.left + window.scrollX + r!.width / 2 - popupWidth / 2}px`,
+          // Y-axis: doc-y of the slider's bottom-edge. translateY(-100%) shifts
+          // popup up by its own height so its bottom-edge sits at this y. The
+          // popup-card's content is laid out so the SLIDERS sit at popup-bottom
+          // (labels above), giving slider-bottom = original-slider-bottom.
+          `top: ${r!.bottom + window.scrollY}px`,
+          `width: ${popupWidth}px`,
+          `min-height: ${r!.height}px`,
+          'transform: translateY(-100%)',
+        ].join('; ');
 
     return html`
       <div
@@ -2122,6 +2502,8 @@ export class EverydayGroupLayoutExpanded extends LitElement {
         const ctrl = this._memberPickers.get(id);
         if (ctrl) this._closePickersExcept(ctrl);
       },
+      // Stefan-2026-05-12 PA-0002 (R1): effects slot opt-in flag forwarded.
+      effectsInPickerProvider: () => this.effectsInPicker,
     });
   }
 
@@ -2278,30 +2660,65 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       }
       return;
     }
-    if (mode === 'parallel') {
-      // Stefan-2026-05-09 P45 R26a: popup mounts at the slider's exact
-      // position (not viewport-centred). Find the slider element nested
-      // under the member-tile we long-pressed and capture its bounding
-      // rect. Falls back to the host's rect if the slider isn't located
-      // (defensive — shouldn't happen in normal flow).
-      // Stefan-2026-05-09 P47-fix: when triggered from inside the
-      // topology-popup, the tile lives in the body-portal (document
-      // tree), NOT in this.renderRoot. Query both locations so the
-      // anchor rect lands on the actual slider, not on the host card.
-      let anchorRect: DOMRect | null = null;
-      const tileSelector = `.tile.member[data-entity="${CSS.escape(entityId)}"]`;
-      const tileEl = (this.renderRoot.querySelector(tileSelector)
-        ?? this._popupPortal?.querySelector(tileSelector)) as HTMLElement | null;
-      const memberCol = tileEl?.parentElement;
-      const sliderEl = memberCol?.querySelector('everyday-vertical-pill-slider') as HTMLElement | null;
-      if (sliderEl) {
-        anchorRect = sliderEl.getBoundingClientRect();
-      } else {
-        anchorRect = this.getBoundingClientRect();
+    if (mode === 'collapse') {
+      // Stefan-2026-05-12 PA-0002 (R2a): fold the inline-expanded compact
+      // card back to its collapsed state. Only fires from the
+      // `group-expanded` variant (picker-geometry gates the slot to that
+      // variant, and only when `expansionSticky` is true). The state
+      // change cascades through updated() which persists to localStorage,
+      // unmounts member-pickers, and resets _memberModes. Stefan-Quote:
+      // "the mode picker needs to have an option to collapse the node".
+      if (variant === 'group-expanded' && this.compact) {
+        this._compactExpanded = false;
       }
+      return;
+    }
+    if (mode === 'parallel') {
+      // Stefan-2026-05-12 R336 (PA-0016 partial-revert of R333): when the
+      // user triggers parallel-popup from a MEMBER tile (variant='member',
+      // a leaf where the slider sits directly above the icon), restore the
+      // pre-R333 slider-rect anchor. Stefan-Quote PA-0016: "for child nodes
+      // (where the slider is directly above the child icon) the paralell
+      // sliders pop up should appear as it was before: The slider length
+      // should be the same as the slider which is directly above the child
+      // icon and it should be in the same vertical position as the slider
+      // which is directly above the child icon".
+      //
+      // Picker-dot anchor (R333) is kept ONLY for variants without an
+      // overlying slider — compact-group tiles (variant='group-compact')
+      // and other no-slider-above contexts. There the bottom-center of the
+      // popup at the picker-dot mirrors the wheel/saved popup convention.
+      //
+      // Decision matrix:
+      //   variant='member'         → slider-rect anchor (R336 revert)
+      //   variant='group-compact'  → picker-dot anchor (R333)
+      //   variant='group-expanded' → picker-dot anchor (no slider above)
+      //   variant='parallel-inline'→ picker-dot anchor (no slider above)
+      //   action='expand_inline_parallel' (no iconOrigin) → slider-rect
       const modes = this.parallelSlidersConfig?.modes
         ?? ['brightness', 'temperature', 'hue', 'saturation'];
-      this._parallelAnchorRect = anchorRect;
+      const preferSliderRect = variant === 'member' || !popupOrigin;
+      if (!preferSliderRect && popupOrigin) {
+        this._parallelPopupOrigin = popupOrigin;
+        this._parallelAnchorRect = null;
+      } else {
+        // Stefan-2026-05-09 P45 R26a + R336 (PA-0016): slider-rect anchor.
+        // Find the slider nested under the long-pressed member-tile and
+        // capture its bounding rect. Defensive host-rect fallback in case
+        // the slider isn't found. Stefan-2026-05-09 P47-fix: when triggered
+        // from inside the topology-popup, the tile lives in the body-portal
+        // (document tree), NOT in this.renderRoot. Query both locations so
+        // the anchor rect lands on the actual slider, not on the host card.
+        const tileSelector = `.tile.member[data-entity="${CSS.escape(entityId)}"]`;
+        const tileEl = (this.renderRoot.querySelector(tileSelector)
+          ?? this._popupPortal?.querySelector(tileSelector)) as HTMLElement | null;
+        const memberCol = tileEl?.parentElement;
+        const sliderEl = memberCol?.querySelector('everyday-vertical-pill-slider') as HTMLElement | null;
+        this._parallelAnchorRect = sliderEl
+          ? sliderEl.getBoundingClientRect()
+          : this.getBoundingClientRect();
+        this._parallelPopupOrigin = null;
+      }
       this._parallelSlidersTarget = { entityId, modes: modes as SliderMode[] };
       this._popupOpenedAt = Date.now();
       return;
@@ -2644,6 +3061,10 @@ export class EverydayGroupLayoutExpanded extends LitElement {
         if (!inParallelPopup && !inPopup && !withinSuppression) {
           this._parallelSlidersTarget = null;
           this._parallelAnchorRect = null;
+          // Stefan-2026-05-12 R333 (PA-0015): also clear the picker-dot
+          // origin so the next open recomputes anchor from scratch and
+          // doesn't reuse a stale dot-position from a different member.
+          this._parallelPopupOrigin = null;
         }
         return;
       }
@@ -2685,6 +3106,16 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       // inplace-popup, or a slider). Gated by the popup-suppression window
       // so the phantom click from the long-press that just expanded the
       // view doesn't collapse it.
+      //
+      // Stefan-2026-05-12 PA-0002 (R2a): under sticky-expansion, OUTSIDE-
+      // CLICK NEVER COLLAPSES. The user must explicitly fold via the
+      // long-press mode-picker → "Collapse" slot. Stefan-Quote: "when
+      // this card is expanded then only tapping outside of the card should
+      // close the expansion (or lets make it so, that the expansion state
+      // is remembered. that is better. ... If it is not the mode picker
+      // needs to have an option to collapse the node." — sticky-expansion
+      // is the "remembered" branch and inverts the tap-outside semantic.
+      if (this.expansionSticky) return;
       if (this._compactExpanded && !withinSuppression) {
         // Stefan-2026-05-12 R333 (PA-0012): when a popup is open ANYWHERE
         // on the page (could be a wheel/saved/parallel-popup hosted by a
@@ -2781,9 +3212,78 @@ export class EverydayGroupLayoutExpanded extends LitElement {
    * the entity's HA group state — could refine to count those too, but 1
    * is a safe default since we don't know the depth without DOM access).
    */
+  /**
+   * Stefan-2026-05-12 R334 (PA-0015): aggregate THIS card's current
+   * visible-leaf-count, used as the payload of the `visible-leaf-count-
+   * change` event dispatched to parent group-layouts. The parent reads
+   * this number to size its own col-fr-share for THIS child.
+   *
+   * Computation:
+   *   - Compact + collapsed (compact && !_compactExpanded) → 1 (single
+   *     compact tile is showing, no expanded sliders).
+   *   - Otherwise (compact + expanded, or non-compact = fully expanded):
+   *     sum over each member of `_memberLeafWeight(id)`, which itself
+   *     consults the runtime cache for nested children before falling
+   *     back to static config counts. Recursion stops at bare-string
+   *     members (= 1 leaf each).
+   *
+   * This is the public-ish surface for the parent. The event detail
+   * carries the result, so the parent doesn't need to query our DOM.
+   */
+  private _currentVisibleLeafCount(): number {
+    if (this.compact && !this._compactExpanded) return 1;
+    if (!this.memberIds || this.memberIds.length === 0) return 1;
+    let total = 0;
+    for (const id of this.memberIds) {
+      total += this._memberLeafWeight(id);
+    }
+    return Math.max(1, total);
+  }
+
+  /**
+   * Stefan-2026-05-12 R334 (PA-0015): handler for the
+   * `visible-leaf-count-change` event bubbled up from a nested embedded
+   * child. Stops propagation here so the original event doesn't reach
+   * THIS card's own parent — instead, our own `updated()` lifecycle will
+   * dispatch a FRESH aggregated event upward carrying our recomputed
+   * total (which now accounts for the child's new count).
+   */
+  private _onChildVisibleLeafCountChange(memberId: string, ev: Event): void {
+    ev.stopPropagation();
+    const detail = (ev as CustomEvent<{ count?: number }>).detail;
+    const count = detail?.count;
+    if (typeof count !== 'number' || !Number.isFinite(count) || count < 1) return;
+    const prev = this._childVisibleLeafCounts.get(memberId);
+    if (prev === count) return;
+    const next = new Map(this._childVisibleLeafCounts);
+    next.set(memberId, count);
+    this._childVisibleLeafCounts = next;
+  }
+
   private _memberLeafWeight(memberId: string): number {
+    // Stefan-2026-05-12 R334 (PA-0015): RUNTIME visible-leaf-count wins when
+    // available. The embedded child (everyday-light-card → its inner
+    // everyday-group-layout-expanded) dispatches `visible-leaf-count-change`
+    // events whenever its `_compactExpanded` flips (or recursive children
+    // change). The cached count reflects the actual number of visible-leaf
+    // sliders that child is currently rendering. With this, when bathroom
+    // is inline-expanded its weight jumps from 1 (compact) to 3 (visible
+    // leaves), and the parent's grid-template-columns redistributes so the
+    // 5 total visible leaves get equal-pitch slots across the card width
+    // (each col-share = visibleLeaves/totalVisible * containerWidth).
+    //
+    // Falls back to the static config-aware count when the child hasn't
+    // reported yet (initial render before the first event) — that count
+    // now also respects `group.layout: 'compact'` (see _countLeavesForEntity).
+    const runtime = this._childVisibleLeafCounts.get(memberId);
+    if (typeof runtime === 'number') return runtime;
     const nestedConfig = this.memberConfigs.get(memberId);
-    return this._countLeavesForEntity(memberId, nestedConfig?.group?.manual_members, 0);
+    return this._countLeavesForEntity(
+      memberId,
+      nestedConfig?.group?.manual_members,
+      0,
+      nestedConfig?.group?.layout,
+    );
   }
 
   /**
@@ -2807,15 +3307,39 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     entityId: string,
     manualMembers: ManualMember[] | undefined,
     level: number,
+    layout?: 'compact' | 'expanded' | 'auto',
   ): number {
     if (level > 10) return 1;
+    // Stefan-2026-05-12 R334 (PA-0015): compact-layout members render as
+    // a single tile regardless of subtree size. Returning 1 here gives the
+    // PARENT's gridTemplateColumns the correct "visible-leaves at THIS
+    // state" weight. Pre-R334 the recursion always returned the full
+    // subtree count, so a compact bathroom (1 tile visible) got the same
+    // 3fr col-share as an expanded bathroom (3 tiles visible) — making
+    // sibling-compact-kitchen look unfairly cramped in 2fr while
+    // showing only 1 tile too. Stefan PA-0015: "they should be evenly
+    // spaced at each step of the expansion".
+    //
+    // When the runtime later expands the compact child, its
+    // visible-leaf-count event will override this fallback via the
+    // _childVisibleLeafCounts cache (see _memberLeafWeight).
+    if (layout === 'compact') return 1;
     if (manualMembers && manualMembers.length > 0) {
       let total = 0;
       for (const m of manualMembers) {
         if (typeof m === 'string') {
           total += this._countLeavesForEntity(m, undefined, level + 1);
         } else if (m.entity) {
-          total += this._countLeavesForEntity(m.entity, m.group?.manual_members, level + 1);
+          // Stefan-2026-05-12 R334 (PA-0015): pass the nested layout so deep
+          // compact descendants short-circuit at this level too. Without
+          // this, a deep tree of compact members would still bubble up
+          // full leaf-counts and over-allocate fr-shares at every parent.
+          total += this._countLeavesForEntity(
+            m.entity,
+            m.group?.manual_members,
+            level + 1,
+            m.group?.layout,
+          );
         }
       }
       return total;
@@ -2988,8 +3512,21 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     // (non-embedded) standalone styling collapses the min-height + matches
     // the .caption .single-icon circle via CSS. State-line + name now live
     // INSIDE the .tile.group so they share the tile's 2 px gap.
+    //
+    // Stefan-2026-05-12 PA-0002: thread `sliderHeight` config into the
+    // compact view via inline `--everyday-slider-height` on `.layout`.
+    // Pre-PA-0002 `slider.height` config only applied to the expanded
+    // view (via `_renderTopologyTree`'s inline-style); the compact-
+    // collapsed slider always rendered at the hardcoded 220 (now 270)
+    // styles.ts fallback regardless of user override. Stefan-Quote
+    // (config2.txt repro): `group.layout: compact, slider.height: 270`
+    // expected a 270 px compact slider — got 220 because nothing in the
+    // compact render path threaded the prop into the CSS var.
+    const compactLayoutStyle = this.sliderHeight
+      ? `--everyday-slider-height: ${this.sliderHeight}px`
+      : '';
     return html`
-      <div class="layout compact">
+      <div class="layout compact" style=${compactLayoutStyle}>
         ${this.iconPosition === 'top'
           ? html`${groupTile}${sliderTile}`
           : html`${sliderTile}${groupTile}`}

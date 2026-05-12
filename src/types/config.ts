@@ -141,6 +141,31 @@ export interface GroupConfig {
    * derived height.
    */
   expand_in_place?: boolean;
+
+  /**
+   * Stefan-2026-05-12 PA-0002 (R2a): persist the inline-expanded state of
+   * compact groups across page navigation + reloads. Default `false`
+   * (legacy behaviour — tap outside the card collapses the expansion;
+   * state is per-session only).
+   *
+   * When `true`:
+   *   - The current `_compactExpanded` state is mirrored to localStorage
+   *     under key `everyday-light-card:expanded:${groupEntityId}`.
+   *   - On mount the card reads the persisted state and restores it.
+   *   - Tap-outside no longer collapses the card; the user must
+   *     explicitly fold via the long-press mode-picker → "Collapse" slot
+   *     (added automatically when sticky AND inline-expanded).
+   *
+   * Stefan-Quote: "lets make it so, that the expansion state is
+   * remembered. that is better. Pople can choose to for a node ... if
+   * it should be collapsed automatically or not. If it is not the mode
+   * picker needs to have an option to collapse the node."
+   *
+   * Scope: per-card. Nested cards each carry their own `expansion_sticky`
+   * setting and their own localStorage row keyed by the nested group's
+   * entity id, so sub-trees can be sticky independently of the parent.
+   */
+  expansion_sticky?: boolean;
 }
 
 export interface SavedColorsConfig {
@@ -170,10 +195,20 @@ export interface SavedColorsConfig {
  * restores it. Card config can still set `editable: false` explicitly to
  * suppress the edit-mode path. Persistence still requires `source` (helper
  * or — via R296-C — the HA user_data fallback when source is unset).
+ *
+ * Stefan-2026-05-12 PA-0002 (R1): `in_picker` controls whether the effects
+ * slot appears in the long-press mode-picker. Default `false`. Pre-PA-0002
+ * the slot was auto-added whenever the entity reported a non-empty
+ * `effect_list` — most modern color bulbs do, so every light card showed
+ * an effects diamond by default. Stefan-Quote: "by default the effects-
+ * list should be disabled in the mode-picker". Set `effects_picker.in_picker:
+ * true` to bring it back per-card. Affects member, group-compact,
+ * group-expanded and parallel-inline picker variants uniformly.
  */
 export interface EffectsPickerConfig {
   source?: `helper:${string}`;
   editable?: boolean;
+  in_picker?: boolean;
 }
 
 /**

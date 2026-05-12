@@ -60,6 +60,18 @@ export interface PickerLayoutOpts {
    * useMindmap wins (kept for the embedded path's existing behavior).
    */
   additionalMindmap?: boolean;
+  /**
+   * Stefan-2026-05-12 PA-0002 (R2a): when true, the 'collapse' slot is
+   * appended to the slot list. Used ONLY by `group-expanded` variant
+   * when `group.expansion_sticky: true` AND the card is currently inline-
+   * expanded — gives the user a way to fold the topology back into the
+   * compact tile (outside-click is suppressed under sticky expansion).
+   * Ignored for all other variants — collapse on member/group-compact/
+   * parallel-inline has no meaning. Replaces the 4-diamond's empty left
+   * slot (180°) when neither effects nor mindmap is also there;
+   * otherwise falls through to pentagon distribution.
+   */
+  hasCollapse?: boolean;
 }
 
 /**
@@ -83,7 +95,14 @@ export function getPickerSlots(
   // already visible, nothing to cycle) and 'parallel' (already in
   // parallel mode, popup of same modes redundant).
   if (variant === 'parallel-inline') {
-    const slots: PickerMode[] = ['saved', 'wheel'];
+    // Stefan-2026-05-12 R338 (PA-0016): mindmap slot in parallel-inline
+    // controls expand/contract of the parallel sliders themselves
+    // (compact = 1 brightness slider; expanded = N axes side-by-side).
+    // Always present in parallel-inline variant — gives users a way to
+    // collapse the multi-axis view to a single slider on demand.
+    // Stefan-2026-05-12 R330 (PA-0008) follow-on: mindmap is always at
+    // the TOP of any picker that has it, so it occupies index 0.
+    const slots: PickerMode[] = ['mindmap', 'saved', 'wheel'];
     if (opts.hasEffects) slots.push('effects');
     return slots;
   }
@@ -127,6 +146,12 @@ export function getPickerSlots(
     slots[0] = 'mindmap';
     slots.push('parallel');
   }
+  // Stefan-2026-05-12 PA-0002 (R2a): append 'collapse' to group-expanded
+  // when sticky-expansion is on. Other variants ignore this flag — the
+  // 'collapse' action has no meaning outside the inline-expanded view.
+  if (opts.hasCollapse && variant === 'group-expanded') {
+    slots.push('collapse');
+  }
   return slots;
 }
 
@@ -166,13 +191,27 @@ export function getPickerAngleMap(
   // cardinal angles (not uniform-distribute) so dots stay at top/right/
   // bottom even when cycle is dropped. effects (when present) lands at
   // 180° (where cycle used to be) so 4 slots still form the diamond.
-  if (variant === 'group-expanded') {
+  // Stefan-2026-05-12 PA-0002 (R2a): collapse lands at 180° (the empty
+  // left slot) when effects/mindmap aren't also there. When 5+ slots
+  // are needed (e.g. sticky + hasEffects), fall through to pentagon.
+  //
+  // Stefan-2026-05-12 R341 (PA-0017): condition narrowed from `<= 4` to
+  // `=== 4`. Stefan-Quote: "wenn der mode picker 3 icons hat dann sollen
+  // diese immer so angeordnet sein wie die icons des mode pickers um
+  // spot 1 in [config3.txt]" — that config produces parallel-inline with
+  // 3 slots which fall through to uniform-distribute → equilateral
+  // triangle [270, 30, 150]. group-expanded with 3 slots (parallel/
+  // saved/wheel) was hitting the fixedAngles branch and rendering as
+  // top/right/bottom L-shape. Now any 3-slot picker — regardless of
+  // variant — uses the same uniform triangle distribution.
+  if (variant === 'group-expanded' && slots.length === 4) {
     const fixedAngles: Partial<Record<PickerMode, number>> = {
       parallel: 270,
       saved: 0,
       wheel: 90,
       effects: 180,
       mindmap: 180,
+      collapse: 180,
     };
     for (const slot of slots) {
       if (fixedAngles[slot] !== undefined) result[slot] = fixedAngles[slot];

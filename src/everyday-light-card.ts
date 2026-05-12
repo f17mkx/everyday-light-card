@@ -49,7 +49,7 @@ const DEFAULT_PARALLEL_SAVED_COLORS: ColorTuple[] = [
   [200, 100, 220],  // purple
 ];
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.2';
 
 console.info(
   `%c EVERYDAY-LIGHT-CARD %c v${VERSION} `,
@@ -134,6 +134,19 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
   // any popup edit state used by group-layout-expanded.
   @state() private _displayModeSavedEditing = false;
 
+  /**
+   * Stefan-2026-05-12 R338 (PA-0016): runtime override for the parallel-
+   * inline layout. `undefined` = follow config (`parallel_sliders.layout`).
+   * `true` = compact (1 slider, brightness only). `false` = expanded
+   * (N axes side-by-side). Toggled by the mindmap picker slot in the
+   * parallel-inline picker variant. Stefan-Quote PA-0016: "there is
+   * currently no option to expand the paralell sliders. Just add the
+   * mindmap icon to the mode picker to control the expansion / contraction
+   * of the paralell sliders". The runtime override beats the config when
+   * set so the user can toggle on-the-fly without editing YAML.
+   */
+  @state() private _parallelInlineCompactRuntime: boolean | undefined = undefined;
+
   private _picker = new PickerController(this, {
     // Stefan-2026-05-10 P15.6-r46 (R221 + R222): variant `parallel-inline`
     // replaces `group-expanded` here. Picker now shows only saved/wheel
@@ -177,6 +190,49 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
     // surface (helper:input_text via persistSavedColorsToSource).
     onSavedAddCurrent: () => this._onSavedAddCurrent(),
     onSavedRemove: (idx) => this._onSavedRemove(idx),
+    // Stefan-2026-05-12 PA-0002 (R1): effects slot in picker is opt-in.
+    // Default off — `effects_picker.in_picker: true` brings it back.
+    effectsInPickerProvider: () => this.config?.effects_picker?.in_picker === true,
+    // Stefan-2026-05-12 R338 (PA-0016): mindmap pick in parallel-inline
+    // toggles the runtime compact/expanded override. Initial value tracks
+    // the config; tapping mindmap flips it; tapping again flips back.
+    onParallelMindmapPick: () => {
+      // Resolve the effective current state, then invert it. The runtime
+      // override (when set) wins over the config; otherwise read config.
+      const configCompact = this.config?.parallel_sliders?.layout === 'compact';
+      const effectiveCompact = this._parallelInlineCompactRuntime ?? configCompact;
+      this._parallelInlineCompactRuntime = !effectiveCompact;
+      this.requestUpdate();
+      // Stefan-2026-05-13 R352 (PA-0020): immediately notify the parent
+      // group-layout-expanded that this embedded card's layout shape just
+      // changed (compact ↔ expanded with different icon-Y position). The
+      // parent's mindmap arm + dot for THIS member need to re-anchor at
+      // the new icon-center; without this event the parent only learns of
+      // the change via the per-col ResizeObserver which fires async (1-2
+      // frames later) and sometimes not at all when the col-height delta
+      // is sub-pixel (compact 370 → expanded 368 was the worst case).
+      // Stefan-Quote PA-0020: "the mindmap node, dot and arm for Hall
+      // takes some time to find its place (the mindmap adjustment isnt
+      // instant)". Bubbling + composed so the event crosses shadow roots
+      // and reaches the parent group-layout-expanded which listens at
+      // its .member-cols container. Fired AFTER `requestUpdate` so the
+      // child's own re-render is already queued; parent re-measures in
+      // the same animation frame via direct `_measureNestedIconYs()` call.
+      this.dispatchEvent(new CustomEvent('nested-layout-change', {
+        bubbles: true,
+        composed: true,
+        detail: { entity: this.config?.entity, reason: 'parallel-toggle' },
+      }));
+    },
+    // Stefan-2026-05-12 R342 (PA-0017): expose the current expanded-state
+    // to the picker so its mindmap-slot glyph can swap to the inverted
+    // (COLLAPSE) glyph when expanded. Mirror of the resolution chain in
+    // `onParallelMindmapPick`: runtime override beats config.
+    parallelExpandedProvider: () => {
+      const configCompact = this.config?.parallel_sliders?.layout === 'compact';
+      const effectiveCompact = this._parallelInlineCompactRuntime ?? configCompact;
+      return !effectiveCompact;  // expanded = NOT compact
+    },
   });
 
   /**
@@ -765,6 +821,8 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
         .iconColor=${cfg.icon_color}
         .cycleModes=${cfg.cycle?.modes}
         .effectsEditable=${cfg.effects_picker?.editable !== false}
+        .effectsInPicker=${cfg.effects_picker?.in_picker === true}
+        .expansionSticky=${groupCfg.expansion_sticky === true}
         .embedded=${cfg.embedded === true}
         .depth=${this.depth}
         .hideParent=${hideParent}
@@ -927,7 +985,11 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       // intentionally ignored when layout is compact — Stefan-Quote: "parallel_sliders:
       // layout: compact should mean that in compact view only the brightness
       // slider is shown". Expanded keeps the full multi-axis stack.
-      const parallelLayoutIsCompact = cfg.parallel_sliders?.layout === 'compact';
+      // Stefan-2026-05-12 R338 (PA-0016): runtime override (set by the
+      // mindmap picker slot) wins over config. Lets the user toggle
+      // compact ↔ expanded parallel-inline without YAML edits.
+      const parallelLayoutIsCompact = this._parallelInlineCompactRuntime
+        ?? (cfg.parallel_sliders?.layout === 'compact');
       const modes = parallelLayoutIsCompact
         ? (['brightness'] as Array<'brightness' | 'temperature' | 'hue' | 'saturation'>)
         : ((cfg.parallel_sliders?.modes
@@ -940,14 +1002,35 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       // inline) by default". Opt-in via `show_labels: true`.
       const showLabels = cfg.parallel_sliders?.show_labels === true;
       // Stefan-2026-05-10 P15.6-r29 (R180): parallel-inline default
-      // height now matches the compact-group `full_length_sliders: false`
-      // resolved height (220 px post-r25). The earlier 170 px default
-      // looked too short next to the compact slider in side-by-side
-      // demos. Opt into 260 px via `parallel_sliders.full_length: true`
-      // (matches compact + full_length:true). Explicit `slider.height`
-      // still wins over the new default.
+      // height tracks the universal slider default (220 → 270 post
+      // Stefan-PA-0002 2026-05-12). The earlier 170 px default looked
+      // too short next to the compact slider in side-by-side demos.
+      // Opt into a taller variant via `parallel_sliders.full_length: true`
+      // (still 270 post-PA-0002 since the new universal default already
+      // matches the previous "full" value); kept as a no-op alias for
+      // backwards compat. Explicit `slider.height` still wins.
       const fullLengthParallel = cfg.parallel_sliders?.full_length === true;
-      const sliderH = cfg.slider?.height ?? (fullLengthParallel ? 260 : 220);
+      const baseSliderH = cfg.slider?.height ?? (fullLengthParallel ? 270 : 270);
+      // Stefan-2026-05-12 R347 (PA-0018): `expand_in_place` now applies to
+      // the parallel-inline compact↔expanded toggle (config4.txt scenario).
+      // Stefan-Quote PA-0018: "die option 'Fixed card size' gibt es zwar
+      // im visuellen editor, aber sie hat keinen effekt bei dieser config
+      // [parallel_sliders.layout: compact + group.expand_in_place: true]
+      // — es muss aber da auch ganz genau so funktoinieren, wie bei den
+      // anderen!". When the config opts into compact AND expand_in_place,
+      // and the user toggles to expanded via the mindmap picker slot,
+      // SHRINK the slider so the card's total height stays where it was
+      // in compact mode. Math: compact overhead ≈ 95 px (pad 8+8 + icon
+      // 46 + gap 8 + caption 25), expanded overhead ≈ 163 px (pad 24+24
+      // + mindmap-area 90 + caption 25). Diff ≈ 68 px → expanded slider
+      // shrinks by 68 to compensate. Floor 80 px to keep usable.
+      const expandInPlaceParallel = cfg.group?.expand_in_place === true;
+      const configWasCompact = cfg.parallel_sliders?.layout === 'compact';
+      const isCurrentlyExpanded = !parallelLayoutIsCompact;
+      const PARALLEL_EXPAND_IN_PLACE_DIFF = 68;
+      const sliderH = (expandInPlaceParallel && configWasCompact && isCurrentlyExpanded)
+        ? Math.max(80, baseSliderH - PARALLEL_EXPAND_IN_PLACE_DIFF)
+        : baseSliderH;
       const labelTitle = cfg.name ?? (stateObj.attributes.friendly_name as string | undefined) ?? cfg.entity;
       const userIcon = cfg.icon;
       const haIcon = stateObj.attributes.icon as string | undefined;
@@ -987,16 +1070,14 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       const parallelCompact = parallelLayoutIsCompact;
       const parallelInner = parallelCompact
         ? html`
+            <!-- Stefan-2026-05-12 PA-0002 (R3): parallel_sliders.layout: compact
+                 DOM order flipped — sliders FIRST, then icon below. Pre-PA-0002
+                 the icon rendered ABOVE the slider-row; Stefan-Quote: "the
+                 icon for hall boxes is shown on top of the slider. it needs
+                 to be below the slider". The .single-picker overlay tracks
+                 the new icon position via bottom-anchored CSS (see styles
+                 below). caption stays last. -->
             <div class="parallel-compact-layout">
-              <ha-state-icon
-                class="parallel-compact-icon ${isOn ? 'active' : ''}"
-                style=${parallelIconStateColor}
-                data-interactive=${cfg.gestures?.member_icon ? 'true' : null}
-                .hass=${this.hass}
-                .stateObj=${stateObj}
-                .icon=${iconName}
-              ></ha-state-icon>
-              <div class="single-picker">${this._picker.renderPicker()}</div>
               <div class="parallel-slider-row">
                 ${modes.map(
                   (m) => html`
@@ -1012,6 +1093,15 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
                   `,
                 )}
               </div>
+              <ha-state-icon
+                class="parallel-compact-icon ${isOn ? 'active' : ''}"
+                style=${parallelIconStateColor}
+                data-interactive=${cfg.gestures?.member_icon ? 'true' : null}
+                .hass=${this.hass}
+                .stateObj=${stateObj}
+                .icon=${iconName}
+              ></ha-state-icon>
+              <div class="single-picker">${this._picker.renderPicker()}</div>
               <div class="caption">
                 <span class="name">${labelTitle}</span>
               </div>
@@ -1143,6 +1233,8 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
           .iconColor=${cfg.icon_color}
           .cycleModes=${cfg.cycle?.modes}
           .effectsEditable=${cfg.effects_picker?.editable !== false}
+          .effectsInPicker=${cfg.effects_picker?.in_picker === true}
+          .expansionSticky=${groupCfg.expansion_sticky === true}
           .embedded=${cfg.embedded === true}
           .depth=${this.depth}
           .hideParent=${cfg.parent_node === 'hide'}
@@ -1423,6 +1515,23 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
          der Karte einnehmen. */
       width: 100%;
     }
+    /* Stefan-2026-05-12 R351 (PA-0019): embedded parallel-inline cards
+       (variants .parallel-mindmap-layout for expanded, .parallel-compact-
+       layout for compact) carry default 24/8 px padding designed for the
+       STANDALONE single-light card surface. When embedded as a nested
+       member of a parent group, the parent's .member-col already provides
+       the layout context — extra padding pushes the embedded slider DOWN
+       relative to sibling sliders that have no such padding, producing a
+       "boxes slider is slightly lower than the others" visual artifact
+       (Stefan-Quote PA-0019). Drop padding when embedded so the slider
+       top aligns with siblings exactly. Mirror of the
+       :host([embedded]) .layout { padding: 0 } rule already present on
+       group-layout-expanded.styles.ts:118-122 for the same reason.
+       R111-safe: no backticks in CSS comments. */
+    :host([embedded]) .parallel-mindmap-layout,
+    :host([embedded]) .parallel-compact-layout {
+      padding: 0;
+    }
     ha-card {
       height: 100%;
       display: flex;
@@ -1500,9 +1609,29 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       padding: 8px;
       position: relative;
     }
+    /* Stefan-2026-05-12 R344 (PA-0017): apply the mindmap-node chrome
+       (dark fill + gold border) to .parallel-compact-icon so it matches
+       the other compact-collapsed group icons (.tile.group.compact-target
+       .ic in group-layout-expanded.styles.ts:423-432, AND the single-icon
+       in .caption .single-icon at line 1713-1726 below). Stefan-Quote:
+       "bei R3 fehlt auch der mindmap dot und der runde hintergrund um das
+       icon (damit der slider genau so aussieht wie die anderen)". Pre-r344
+       the parallel-compact-icon was a bare ha-state-icon without the
+       round dark dot + gold ring — visually inconsistent with every other
+       group/single icon that uses the mindmap-node identity.
+       R111-safe: no backticks in CSS comments. */
     .parallel-compact-icon {
       --mdc-icon-size: 28px;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       color: var(--paper-item-icon-color, #c1c1c1);
+      background: var(--mindmap-dot-fill, #3a3a52);
+      border: 2.6px solid var(--mindmap-group-stroke, #f4b91d);
+      box-sizing: border-box;
       pointer-events: auto;
       /* R326: bound element + must declare touch-action statically. */
       touch-action: none;
@@ -1510,9 +1639,21 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
     .parallel-compact-icon.active {
       color: var(--paper-item-icon-active-color, var(--state-light-active-color, #f88d2a));
     }
+    /* Stefan-2026-05-12 PA-0002 (R3): picker anchor moved from top (22 px
+       from layout-top where the icon used to live) to bottom (~47 px from
+       layout-bottom where the icon NOW lives, after the DOM-order flip
+       that put sliders first and icon below). Math: caption ≈ 25 px +
+       parallel-compact-layout gap 8 px + half-icon 14 px = 47 px from
+       layout's padding-bottom edge to icon-center. mode-picker host has
+       size 0×0 so translate(-50%, -50%) is a no-op visually but kept
+       for semantic parity with other picker anchors.
+       Stefan-2026-05-12 R344 (PA-0017): icon size grew from 28→46 px
+       (mindmap-node chrome). New half-icon = 23 px → bottom = 25 + 8 + 23
+       = 56 px so the picker still orbits around the icon-center. Without
+       this update the picker would sit ~9 px below the icon (= 23-14). */
     .parallel-compact-layout .single-picker {
       position: absolute;
-      top: 22px;
+      bottom: 56px;
       left: 50%;
       transform: translate(-50%, -50%);
       pointer-events: auto;
@@ -1522,7 +1663,19 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
     .parallel-slider-row {
       display: flex;
       flex-direction: row;
-      gap: 0;
+      /* Stefan-2026-05-12 R350 (PA-0019): minimum gap so sliders don't
+         visually butt against each other in narrow containers. Stefan-
+         Quote PA-0019: "when expanded and when there is enough space the
+         paralell sliders are 0px apart (no gap between them)". With
+         gap=14, even a tight container shows clear separation. space-
+         around adds additional spacing on top of the gap when there's
+         slack — so wider containers naturally distribute more space
+         between sliders while still respecting the floor. Mindmap-arms
+         still anchor at slider-centers via space-around's distribution
+         (the item's center stays the same; only the BETWEEN-spacing
+         changes by +14 px which is small enough that arm-misalignment
+         is not visually noticeable). */
+      gap: 14px;
       /* Stefan-2026-05-09 P12 R103: space-around distributes the sliders
          exactly where mindmap-path's simple (i+0.5)/N * W formula puts
          the memberX positions, so the arms hit slider-centers without
@@ -1568,12 +1721,18 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
     }
     .parallel-mindmap-icon {
       position: absolute;
-      /* Stefan-2026-05-09 P12 R100 alignment fix: SVG groupYOverride=60 in
-         90px SVG → groupDot center at y=60 from top → 30 from bottom.
-         Icon size 26 → halfsize 13. Bottom = 30 - 13 = 17. */
-      bottom: 17px;
+      /* Stefan-2026-05-12 R343 (PA-0017): switched from bottom+translateX
+         to top+translate(-50%,-50%) so the icon's geometric center lands
+         exactly at y=60 from container-top — same Y as the SVG groupDot
+         (groupYOverride=60 in the 90 px-tall .parallel-mindmap-area).
+         Pre-r343 bottom:17 math was correct on paper (90-17=73, 73-13=60),
+         but bottom-anchored positioning is sensitive to sub-pixel rounding
+         in some HA themes when --mdc-icon-size is overridden — caused the
+         icon to drift 1-3 px in real renders. top+translate(-50%,-50%)
+         pins the visual center deterministically. */
+      top: 60px;
       left: 50%;
-      transform: translateX(-50%);
+      transform: translate(-50%, -50%);
       --mdc-icon-size: 26px;
       color: var(--paper-item-icon-color, #c1c1c1);
       pointer-events: auto;
@@ -1756,11 +1915,18 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
        picker dots orbiting around wrapper origin, so origin == icon-center
        lands the dots correctly around the icon. Stefan-2026-05-10:
        previously without wrapper the dots landed at .parallel-mindmap-area
-       top-left ("zu weit links und zu weit oben"). */
+       top-left ("zu weit links und zu weit oben").
+       Stefan-2026-05-12 R343 (PA-0017): switched from bottom-anchor to
+       top-anchor + translate(-50%, -50%) for sub-pixel-stable centering.
+       Same Y as .parallel-mindmap-icon (top:60) so the picker dots orbit
+       exactly around the icon-center. Pre-r343 bottom:30 math was correct
+       (height 90 - 30 = 60) but bottom-anchored positioning drifted in
+       some HA themes — the picker halo appeared a few px above the icon. */
     .parallel-mindmap-area .parallel-picker {
       position: absolute;
-      bottom: 30px;
+      top: 60px;
       left: 50%;
+      transform: translate(-50%, -50%);
       z-index: 41;
       pointer-events: auto;
       /* Stefan-2026-05-12 R326 (PA-0007 deep-dive): finger drifting between

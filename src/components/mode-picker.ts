@@ -24,7 +24,13 @@ import { LitElement, html, svg, css, type CSSResult, type TemplateResult } from 
 import { customElement, property } from 'lit/decorators.js';
 import { getPickerSlots, getPickerAngleMap } from '../helpers/picker-geometry.js';
 
-export type PickerMode = 'temp' | 'wheel' | 'saved' | 'mindmap' | 'parallel' | 'cycle' | 'effects';
+// Stefan-2026-05-12 PA-0002 (R2a): 'collapse' picker mode appears only on
+// expanded-group cards when `group.expansion_sticky: true` AND the card is
+// currently inline-expanded. Picking it sets `_compactExpanded = false`,
+// folding the topology back into the compact tile. Required when sticky
+// expansion is enabled (outside-click is suppressed), otherwise users have
+// no way to fold the topology back without a config reload.
+export type PickerMode = 'temp' | 'wheel' | 'saved' | 'mindmap' | 'parallel' | 'cycle' | 'effects' | 'collapse';
 
 /**
  * Layout variant — drives both how many options render AND their angles.
@@ -157,6 +163,28 @@ export class EverydayModePicker extends LitElement {
    */
   @property({ type: Boolean, attribute: 'additional-mindmap' }) additionalMindmap = false;
 
+  /**
+   * Stefan-2026-05-12 PA-0002 (R2a): when true, the 'collapse' slot is
+   * appended to the slot list (group-expanded variant only). Used when
+   * `group.expansion_sticky: true` AND the card is inline-expanded —
+   * gives the user a way to fold the topology back since outside-click
+   * is suppressed under sticky expansion. Picker dispatches
+   * `mode-pick` with `detail.mode = 'collapse'` on selection.
+   */
+  @property({ type: Boolean, attribute: 'has-collapse' }) hasCollapse = false;
+
+  /**
+   * Stefan-2026-05-12 R342 (PA-0017): true when the parallel-inline layout
+   * is currently EXPANDED (multi-axis sliders side-by-side). Drives the
+   * glyph swap on the `mindmap` slot in the parallel-inline variant —
+   * when expanded, render the inverted-mindmap (COLLAPSE) glyph so the
+   * user reads the action as "collapse back to compact"; when compact,
+   * render the upright MINDMAP glyph signalling "expand to multi-axis".
+   * Mirrors the host-icon swap pattern used elsewhere when state implies
+   * the inverse action. Default false (compact).
+   */
+  @property({ type: Boolean, attribute: 'parallel-expanded' }) parallelExpanded = false;
+
   private _onPick = (mode: PickerMode) => (ev: Event): void => {
     ev.stopPropagation();
     this.dispatchEvent(
@@ -203,6 +231,20 @@ export class EverydayModePicker extends LitElement {
     if (opt.mode === 'temp' && this.currentMode === 'temperature') {
       return this._renderModeIcon('brightness');
     }
+    // Stefan-2026-05-12 R342 (PA-0017): when this is the parallel-inline
+    // mindmap slot AND the parallel layout is currently expanded, render
+    // the inverted mindmap (= COLLAPSE glyph) so the icon reads as
+    // "collapse back to compact". Stefan-Quote PA-0017: "bei R3 soll beim
+    // zusammenklappen von den paralellen slidern die umgekehrte mindmap
+    // im mode picker gezeigt werden". Only swaps in parallel-inline variant
+    // — the `mindmap` slot in member/group-compact still means "expand".
+    if (
+      opt.mode === 'mindmap'
+      && this.variant === 'parallel-inline'
+      && this.parallelExpanded
+    ) {
+      return this._renderRawIcon('COLLAPSE');
+    }
     if (opt.iconPath === '7DOT') {
       return html`
         <svg viewBox="0 0 24 24" class="g">
@@ -242,6 +284,29 @@ export class EverydayModePicker extends LitElement {
         </svg>
       `;
     }
+    if (opt.iconPath === 'COLLAPSE') {
+      // Stefan-2026-05-12 PA-0002 (R2a): "collapse expanded topology" glyph.
+      // Inverted mindmap-trizack — host (large dot) at TOP, three child
+      // nodes converging at the BOTTOM, curves drawn from children-toward-
+      // host (suggesting "fold up into the parent"). Mirrors the MINDMAP
+      // glyph's L-arm geometry so users recognise the visual relationship.
+      return html`
+        <svg viewBox="0 0 24 24" class="g">
+          <!-- Host at TOP-center -->
+          <circle cx="12" cy="4" r="2.4" fill="currentColor"></circle>
+          <!-- 3 child nodes at bottom y=18 — converging into the host above -->
+          <circle cx="4" cy="18" r="1.8" fill="currentColor"></circle>
+          <circle cx="12" cy="18" r="1.8" fill="currentColor"></circle>
+          <circle cx="20" cy="18" r="1.8" fill="currentColor"></circle>
+          <!-- Left arm: child(4,18) curving up to host(12,4) -->
+          <path d="M 4 18 C 4 10 6 5 12 4" fill="none"></path>
+          <!-- Center arm: vertical -->
+          <path d="M 12 18 L 12 4" fill="none"></path>
+          <!-- Right arm: mirror -->
+          <path d="M 20 18 C 20 10 18 5 12 4" fill="none"></path>
+        </svg>
+      `;
+    }
     if (opt.iconPath === 'MINDMAP') {
       // Mindmap-trizack glyph for the "expand to topology view" picker
       // option. Stefan-2026-05-09 P41-R12: flatter than P40 — all three
@@ -272,6 +337,56 @@ export class EverydayModePicker extends LitElement {
         <path d=${opt.iconPath}></path>
       </svg>
     `;
+  }
+
+  /**
+   * Stefan-2026-05-12 R342 (PA-0017): render a named glyph (MINDMAP /
+   * COLLAPSE / PARALLEL / EFFECTS / 7DOT) WITHOUT going through the full
+   * `_renderIcon(opt)` dispatch. Lets `_renderIcon` do an opt-mode-aware
+   * glyph swap (e.g. "render COLLAPSE here even though opt.iconPath says
+   * MINDMAP") without recursive calls. Falls back to a minimal SVG when
+   * the glyph code is unknown.
+   */
+  private _renderRawIcon(iconPath: string): TemplateResult {
+    const stub: PickerOption = {
+      mode: 'mindmap',  // arbitrary — caller already decided rendering
+      label: '',
+      angleDeg: 0,
+      iconPath,
+    };
+    // Re-enter _renderIcon's iconPath branches by directly inlining the
+    // matching glyph. Avoids the cycle/temp-mode swap branches at the top
+    // of _renderIcon since this helper is only called for raw glyph render.
+    if (iconPath === 'COLLAPSE') {
+      return html`
+        <svg viewBox="0 0 24 24" class="g">
+          <circle cx="12" cy="4" r="2.4" fill="currentColor"></circle>
+          <circle cx="4" cy="18" r="1.8" fill="currentColor"></circle>
+          <circle cx="12" cy="18" r="1.8" fill="currentColor"></circle>
+          <circle cx="20" cy="18" r="1.8" fill="currentColor"></circle>
+          <path d="M 4 18 C 4 10 6 5 12 4" fill="none"></path>
+          <path d="M 12 18 L 12 4" fill="none"></path>
+          <path d="M 20 18 C 20 10 18 5 12 4" fill="none"></path>
+        </svg>
+      `;
+    }
+    if (iconPath === 'MINDMAP') {
+      return html`
+        <svg viewBox="0 0 24 24" class="g">
+          <circle cx="4" cy="6" r="1.8" fill="currentColor"></circle>
+          <circle cx="12" cy="6" r="1.8" fill="currentColor"></circle>
+          <circle cx="20" cy="6" r="1.8" fill="currentColor"></circle>
+          <circle cx="12" cy="20" r="2.4" fill="currentColor"></circle>
+          <path d="M 12 20 C 6 19 4 14 4 6" fill="none"></path>
+          <path d="M 12 20 L 12 6" fill="none"></path>
+          <path d="M 12 20 C 18 19 20 14 20 6" fill="none"></path>
+        </svg>
+      `;
+    }
+    // Unknown glyph code — render an empty SVG so the dot still has a
+    // valid child (avoids layout collapse).
+    void stub;
+    return html`<svg viewBox="0 0 24 24" class="g"></svg>`;
   }
 
   /**
@@ -364,12 +479,14 @@ export class EverydayModePicker extends LitElement {
       omitTemp: this.omitTemp,
       useMindmap: this.useMindmap,
       additionalMindmap: this.additionalMindmap,
+      hasCollapse: this.hasCollapse,
     });
     const angleMap = getPickerAngleMap(v, {
       hasEffects: this.hasEffects,
       omitTemp: this.omitTemp,
       useMindmap: this.useMindmap,
       additionalMindmap: this.additionalMindmap,
+      hasCollapse: this.hasCollapse,
     });
     const slotMeta: Record<string, Omit<PickerOption, 'angleDeg'>> = {
       wheel: { mode: 'wheel', label: wheel.label, iconPath: wheel.iconPath },
@@ -379,6 +496,9 @@ export class EverydayModePicker extends LitElement {
       parallel: { mode: 'parallel', label: 'Parallel sliders', iconPath: 'PARALLEL' },
       mindmap: { mode: 'mindmap', label: 'Expand', iconPath: 'MINDMAP' },
       effects: { mode: 'effects', label: 'Effects', iconPath: 'EFFECTS' },
+      // Stefan-2026-05-12 PA-0002 (R2a): collapse-topology mode for sticky
+      // expansion. Label "Collapse" reads as the inverse of "Expand".
+      collapse: { mode: 'collapse', label: 'Collapse', iconPath: 'COLLAPSE' },
     };
     return slots
       .map((m): PickerOption | null => {

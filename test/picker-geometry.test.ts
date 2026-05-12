@@ -63,13 +63,15 @@ describe('getPickerSlots', () => {
     expect(getPickerSlots('group-expanded', { omitTemp: true })).toEqual(['wheel', 'saved']);
   });
 
-  // Stefan-2026-05-10 P15.6-r46 (R221 + R222): parallel-inline variant.
-  it('parallel-inline → saved + wheel only (drops cycle + parallel)', () => {
-    expect(getPickerSlots('parallel-inline')).toEqual(['saved', 'wheel']);
+  // Stefan-2026-05-10 P15.6-r46 (R221 + R222) + R338 (PA-0016): parallel-
+  // inline variant now ALSO has mindmap (toggles compact/expanded layout).
+  it('parallel-inline → mindmap + saved + wheel (R338 added mindmap)', () => {
+    expect(getPickerSlots('parallel-inline')).toEqual(['mindmap', 'saved', 'wheel']);
   });
 
-  it('parallel-inline + hasEffects → saved + wheel + effects', () => {
+  it('parallel-inline + hasEffects → mindmap + saved + wheel + effects', () => {
     expect(getPickerSlots('parallel-inline', { hasEffects: true })).toEqual([
+      'mindmap',
       'saved',
       'wheel',
       'effects',
@@ -205,9 +207,26 @@ describe('pickerHoverFromPointer (group-compact + group-expanded share modern la
     expect(pickerHoverFromPointer(-80, 0, 'group-compact')).toBe('cycle');
   });
 
-  it('group-expanded (modern, no omitTemp): same 4-diamond as member', () => {
+  // Stefan-2026-05-12 R341 (PA-0017): group-expanded with 3 slots now uses
+  // equilateral triangle distribution [270, 30, 150] (parallel top, saved
+  // lower-right, wheel lower-left) instead of the legacy fixed-cardinal
+  // L-shape [270, 0, 90]. Triangle matches the parallel-inline 3-slot
+  // arrangement Stefan greenlit in config3.txt's spot 1.
+  it('group-expanded (3 slots, no effects): triangle layout', () => {
     expect(pickerHoverFromPointer(0, -80, 'group-expanded')).toBe('parallel');
-    expect(pickerHoverFromPointer(0, 80, 'group-expanded')).toBe('wheel');
+    // saved at 30° → cos*64 ≈ 55, sin*64 ≈ 32 → drag right-and-down
+    expect(pickerHoverFromPointer(55, 32, 'group-expanded')).toBe('saved');
+    // wheel at 150° → cos*64 ≈ -55, sin*64 ≈ 32 → drag left-and-down
+    expect(pickerHoverFromPointer(-55, 32, 'group-expanded')).toBe('wheel');
+  });
+
+  it('group-expanded (4 slots, hasEffects): keeps fixed-cardinal diamond', () => {
+    // 4-slot stays in fixedAngles branch — parallel top, saved right,
+    // wheel bottom, effects left.
+    expect(pickerHoverFromPointer(0, -80, 'group-expanded', { hasEffects: true })).toBe('parallel');
+    expect(pickerHoverFromPointer(80, 0, 'group-expanded', { hasEffects: true })).toBe('saved');
+    expect(pickerHoverFromPointer(0, 80, 'group-expanded', { hasEffects: true })).toBe('wheel');
+    expect(pickerHoverFromPointer(-80, 0, 'group-expanded', { hasEffects: true })).toBe('effects');
   });
 });
 

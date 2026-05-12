@@ -54,8 +54,37 @@
  * Side-effect-free, no Lit dependency, fully unit-testable.
  */
 
-export const GAP_RATIOS = [3.5, 1.75, 1.0, 0.5, 0.25] as const;
-export const GAP_MAX_BY_DEPTH = [28, 14, 8, 4, 2] as const;
+/**
+ * Stefan-2026-05-12 R337 (PA-0016): re-tuned cascade so depth-0 EQUALS
+ * depth-1 (both 14 px at reference-width 600). Stefan-Quote PA-0016: "the
+ * gap between Hall door and Main desk should be the same size as the gap
+ * between kitchen counter and bathroom mirror". Hall-door↔Main-desk is at
+ * depth-0 (Apartment-root boundary); Kitchen-counter↔Bathroom-mirror is at
+ * depth-1 (Back-internal boundary). Stefan wants these visually equal — a
+ * single "between-groups" gap regardless of nesting depth above depth-1.
+ *
+ * Cascade:
+ *   depth 0 = depth 1 = 14 px (any inter-group boundary)
+ *   depth 2 =          7 px  (e.g. Hall-internal Spots/Boxes/Door
+ *                              boundary — deeper than Back-internal)
+ *   depth 3+ =          3 px (floor — intra-deepest-group, e.g. within
+ *                              Hall_spots leaves)
+ *
+ * Why depth-0 == depth-1: in nested trees (Apartment → Back/Main →
+ * Kitchen/Bathroom/Hall → leaves), the visible boundaries are crossed at
+ * different depths but Stefan reads them as a single "group boundary"
+ * cue. Distinguishing two cousin-leaves at depth-1 vs depth-0 visually is
+ * lower-priority than distinguishing intra-group (depth-2+, tight) from
+ * inter-group (depth-0 or depth-1, wider).
+ *
+ * Caps held at 2× base so the algorithm stays purely proportional in the
+ * typical HA card width range (300-800 px).
+ *
+ * Pre-R337 (R335) was [3.5, 0.875, 0.5, 0.375, 0.25] → 28/7/4/3/3 at ref.
+ * Pre-R335 was [3.5, 1.75, 1.0, 0.5, 0.25] → 28/14/8/4/2 at ref.
+ */
+export const GAP_RATIOS = [1.75, 1.75, 0.875, 0.375, 0.25] as const;
+export const GAP_MAX_BY_DEPTH = [28, 28, 14, 8, 6] as const;
 export const GAP_FLOOR = 3;
 export const GAP_REFERENCE_WIDTH = 600;
 export const GAP_RATIO_TO_PX_UNIT = 8;

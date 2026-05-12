@@ -101,6 +101,18 @@ export interface PickerControllerOptions {
    */
   onEffectsPick?: () => void;
   /**
+   * Stefan-2026-05-12 R338 (PA-0016): host-supplied handler for the
+   * 'mindmap' picker slot when the picker variant is 'parallel-inline'.
+   * Stefan-Quote PA-0016: "there is currently no option to expand the
+   * paralell sliders. Just add the mindmap icon to the mode picker to
+   * control the expansion / contraction of the paralell sliders". The
+   * host's implementation should toggle a runtime state that swaps the
+   * parallel-inline layout between compact (1 slider, brightness only)
+   * and expanded (N axes side-by-side). Default behavior when undefined:
+   * the mindmap pick is a no-op.
+   */
+  onParallelMindmapPick?: () => void;
+  /**
    * Stefan-2026-05-10 P15.6-r46 (R223): host-supplied handler for the
    * "save current color" + cell button in saved-colors edit-mode. The
    * host reads the entity's current rgb (and color_temp_kelvin if in
@@ -136,6 +148,39 @@ export interface PickerControllerOptions {
    * providers return true, useMindmap wins (kept for the embedded path).
    */
   additionalMindmapProvider?: () => boolean;
+  /**
+   * Stefan-2026-05-12 PA-0002 (R1): when defined and returns true, the
+   * effects picker slot can show (gated also by the entity actually
+   * having a non-empty `effect_list`). Default behaviour without this
+   * provider is "off" — the slot stays hidden even if the entity has
+   * effects. Stefan-Quote: "by default the effects-list should be disabled
+   * in the mode-picker". Opt in per-card via `effects_picker.in_picker:
+   * true`. Provider pattern (vs static boolean) so the config flag can
+   * be hot-swapped via `hassProvider`-style reactive reads.
+   */
+  effectsInPickerProvider?: () => boolean;
+  /**
+   * Stefan-2026-05-12 PA-0002 (R2a): when defined and returns true, the
+   * 'collapse' picker slot is appended (group-expanded variant only).
+   * Used together with `group.expansion_sticky: true` AND the card
+   * being inline-expanded — outside-click is suppressed under sticky
+   * expansion, so users need this picker option to fold the topology
+   * back. Other variants ignore — collapse has no meaning outside the
+   * inline-expanded group view.
+   */
+  hasCollapseProvider?: () => boolean;
+  /**
+   * Stefan-2026-05-12 R342 (PA-0017): provider for the parallel-inline
+   * expanded-state flag. Drives the mindmap-slot glyph swap — when the
+   * parallel layout is currently expanded (multi-axis sliders visible),
+   * the mindmap glyph in the picker flips to the inverted/COLLAPSE shape
+   * so the action reads as "collapse back to compact". Only meaningful
+   * for `variant: 'parallel-inline'`; ignored for other variants.
+   * Provider pattern (vs static boolean) so reactive `_parallelInline
+   * CompactRuntime` toggles propagate to the picker without needing the
+   * controller to be re-instantiated.
+   */
+  parallelExpandedProvider?: () => boolean;
 }
 
 export class PickerController implements ReactiveController {
@@ -400,7 +445,12 @@ export class PickerController implements ReactiveController {
           ? this.opts.hassProvider()!.states[this.opts.entityIdProvider()!]
           : undefined;
         const effectList = stateObj?.attributes?.effect_list as string[] | undefined;
-        const hasEffects = Array.isArray(effectList) && effectList.length > 0;
+        // Stefan-2026-05-12 PA-0002 (R1): gate effects slot on opt-in flag.
+        // Pre-PA-0002 any entity reporting effect_list got the slot for free
+        // — most modern bulbs do, so every card showed effects by default.
+        // Now requires `effects_picker.in_picker: true` via provider.
+        const hasEffects = Array.isArray(effectList) && effectList.length > 0
+          && this.opts.effectsInPickerProvider?.() === true;
         this.pickerHover = pickerHoverFromPointer(
           ev.clientX - this._origin.x,
           ev.clientY - this._origin.y,
@@ -409,6 +459,7 @@ export class PickerController implements ReactiveController {
             hasEffects,
             useMindmap: this.opts.useMindmapProvider?.() ?? false,
             additionalMindmap: this.opts.additionalMindmapProvider?.() ?? false,
+            hasCollapse: this.opts.hasCollapseProvider?.() ?? false,
           },
         );
         this.host.requestUpdate();
@@ -462,11 +513,14 @@ export class PickerController implements ReactiveController {
         ? this.opts.hassProvider()!.states[this.opts.entityIdProvider()!]
         : undefined;
       const effectList = stateObj?.attributes?.effect_list as string[] | undefined;
-      const hasEffects = Array.isArray(effectList) && effectList.length > 0;
+      // Stefan-2026-05-12 PA-0002 (R1): effects slot gated on opt-in.
+      const hasEffects = Array.isArray(effectList) && effectList.length > 0
+        && this.opts.effectsInPickerProvider?.() === true;
       this._origin = pickerDotPosition(mode, this._origin, this.opts.variant, {
         hasEffects,
         useMindmap: this.opts.useMindmapProvider?.() ?? false,
         additionalMindmap: this.opts.additionalMindmapProvider?.() ?? false,
+        hasCollapse: this.opts.hasCollapseProvider?.() ?? false,
       });
     }
     if (mode === 'wheel') {
@@ -486,6 +540,15 @@ export class PickerController implements ReactiveController {
       // is preferable to a wrong default).
       if (this.opts.onEffectsPick) {
         this.opts.onEffectsPick();
+        this._lastOpenedAt = Date.now();
+      }
+    } else if (mode === 'mindmap') {
+      // Stefan-2026-05-12 R338 (PA-0016): parallel-inline mindmap toggles
+      // the compact/expanded parallel layout via a host callback. Default
+      // (no callback): no-op. The parallel-inline variant always has this
+      // slot — see getPickerSlots in picker-geometry.ts.
+      if (this.opts.onParallelMindmapPick) {
+        this.opts.onParallelMindmapPick();
         this._lastOpenedAt = Date.now();
       }
     }
@@ -583,7 +646,9 @@ export class PickerController implements ReactiveController {
     const stateObj = (hass && id) ? hass.states[id] : undefined;
     const colorMode = stateObj?.attributes?.color_mode as string | undefined;
     const effectList = stateObj?.attributes?.effect_list as string[] | undefined;
-    const hasEffects = Array.isArray(effectList) && effectList.length > 0;
+    // Stefan-2026-05-12 PA-0002 (R1): effects slot gated on opt-in flag.
+    const hasEffects = Array.isArray(effectList) && effectList.length > 0
+      && this.opts.effectsInPickerProvider?.() === true;
     const currentMode = this.opts.currentSliderModeProvider?.() ?? 'brightness';
     return html`
       <everyday-mode-picker
@@ -595,6 +660,8 @@ export class PickerController implements ReactiveController {
         .hasEffects=${hasEffects}
         .useMindmap=${this.opts.useMindmapProvider?.() === true}
         .additionalMindmap=${this.opts.additionalMindmapProvider?.() === true}
+        .hasCollapse=${this.opts.hasCollapseProvider?.() === true}
+        .parallelExpanded=${this.opts.parallelExpandedProvider?.() === true}
         @mode-pick=${this._onModePick}
         @click=${(ev: Event) => ev.stopPropagation()}
       ></everyday-mode-picker>

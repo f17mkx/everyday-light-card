@@ -31,9 +31,12 @@ describe('R299 constants', () => {
     expect(GAP_RATIOS.length).toBe(GAP_MAX_BY_DEPTH.length);
   });
 
-  it('ratios are monotonically decreasing (deeper = tighter)', () => {
+  it('ratios are monotonically non-increasing (deeper never wider)', () => {
+    // Stefan-2026-05-12 R337 (PA-0016): depth-0 == depth-1, so the
+    // monotonicity is non-strict. Adjacent equal ratios are now valid —
+    // an inter-group boundary at any nesting depth gets the same gap.
     for (let i = 1; i < GAP_RATIOS.length; i++) {
-      expect(GAP_RATIOS[i]).toBeLessThan(GAP_RATIOS[i - 1]);
+      expect(GAP_RATIOS[i]).toBeLessThanOrEqual(GAP_RATIOS[i - 1]);
     }
   });
 
@@ -42,57 +45,70 @@ describe('R299 constants', () => {
   });
 });
 
-describe('computeMemberColsGap — reference width (drop-in parity with R292 absolutes)', () => {
-  it('depth 0 at 600 px = 28 px', () => {
-    expect(computeMemberColsGap({ depth: 0, containerWidth: GAP_REFERENCE_WIDTH })).toBe(28);
+describe('computeMemberColsGap — reference width (R337 equalised depth-0/1)', () => {
+  // Stefan-2026-05-12 R337 (PA-0016): depth-0 == depth-1 = 14 px (any
+  // inter-group boundary). Depth-2 = 7 px (within Hall/Bathroom). Depth 3+
+  // hits the floor at 3 px (within Spots).
+  it('depth 0 at 600 px = 14 px (R337: equal to depth-1, any inter-group)', () => {
+    expect(computeMemberColsGap({ depth: 0, containerWidth: GAP_REFERENCE_WIDTH })).toBe(14);
   });
 
-  it('depth 1 at 600 px = 14 px', () => {
+  it('depth 1 at 600 px = 14 px (R337: equal to depth-0)', () => {
     expect(computeMemberColsGap({ depth: 1, containerWidth: GAP_REFERENCE_WIDTH })).toBe(14);
   });
 
-  it('depth 2 at 600 px = 8 px', () => {
-    expect(computeMemberColsGap({ depth: 2, containerWidth: GAP_REFERENCE_WIDTH })).toBe(8);
+  it('depth 2 at 600 px = 7 px (R337: half of depth-0/1)', () => {
+    expect(computeMemberColsGap({ depth: 2, containerWidth: GAP_REFERENCE_WIDTH })).toBe(7);
   });
 
-  it('depth 3 at 600 px = 4 px', () => {
-    expect(computeMemberColsGap({ depth: 3, containerWidth: GAP_REFERENCE_WIDTH })).toBe(4);
+  it('depth 3 at 600 px = 3 px (floor, intra-deepest-group)', () => {
+    expect(computeMemberColsGap({ depth: 3, containerWidth: GAP_REFERENCE_WIDTH })).toBe(3);
   });
 });
 
 describe('computeMemberColsGap — narrow container (shrinks proportionally)', () => {
-  it('depth 0 at 300 px scales to 14 px (half of 28)', () => {
-    expect(computeMemberColsGap({ depth: 0, containerWidth: 300 })).toBeCloseTo(14, 5);
+  it('depth 0 at 300 px scales to 7 px (half of 14)', () => {
+    expect(computeMemberColsGap({ depth: 0, containerWidth: 300 })).toBeCloseTo(7, 5);
   });
 
-  it('depth 0 at 150 px scales to 7 px (quarter of 28)', () => {
-    expect(computeMemberColsGap({ depth: 0, containerWidth: 150 })).toBeCloseTo(7, 5);
+  it('depth 0 at 150 px clamps at floor 3 (would be 3.5)', () => {
+    // 1.75 * 8 * (150/600) = 3.5 → clamp(min(3,28)=3, 28, 3.5) = 3.5
+    expect(computeMemberColsGap({ depth: 0, containerWidth: 150 })).toBeCloseTo(3.5, 5);
   });
 
-  it('depth 1 at 300 px scales to 7 px (half of 14)', () => {
+  it('depth 1 at 300 px scales to 7 px (same as depth-0 by R337)', () => {
     expect(computeMemberColsGap({ depth: 1, containerWidth: 300 })).toBeCloseTo(7, 5);
   });
 
-  it('depth 2 at 300 px scales to 4 px (half of 8)', () => {
-    expect(computeMemberColsGap({ depth: 2, containerWidth: 300 })).toBeCloseTo(4, 5);
+  it('depth 2 at 300 px clamps at floor 3 px (would be 3.5 — but 0.875*8*(300/600)=3.5, ≥ floor 3)', () => {
+    // 0.875 * 8 * 0.5 = 3.5 → above floor, no clamp.
+    expect(computeMemberColsGap({ depth: 2, containerWidth: 300 })).toBeCloseTo(3.5, 5);
   });
 
-  it('depth 3 at 300 px clamps at floor 3 px (would be 2)', () => {
+  it('depth 3 at 300 px clamps at floor 3 px (would be 1.5)', () => {
     expect(computeMemberColsGap({ depth: 3, containerWidth: 300 })).toBe(GAP_FLOOR);
   });
 });
 
-describe('computeMemberColsGap — wide container (clamps at depth max)', () => {
-  it('depth 0 at 1200 px clamps at 28 px (would be 56)', () => {
+describe('computeMemberColsGap — wide container (R337 caps 28/28/14/8/6)', () => {
+  // Stefan-2026-05-12 R337 (PA-0016): caps lifted to 2× base. Algorithm is
+  // proportional in typical HA card range (300-800 px); cap kicks in
+  // around 1200 px (= 2× reference-width).
+  it('depth 0 at 1200 px = 28 px (proportional, hits new cap)', () => {
     expect(computeMemberColsGap({ depth: 0, containerWidth: 1200 })).toBe(28);
   });
 
-  it('depth 1 at 1200 px clamps at 14 px (would be 28)', () => {
-    expect(computeMemberColsGap({ depth: 1, containerWidth: 1200 })).toBe(14);
+  it('depth 0 at 800 px scales to 18.67 px (proportional, no cap)', () => {
+    // 1.75 * 8 * (800/600) = 18.667
+    expect(computeMemberColsGap({ depth: 0, containerWidth: 800 })).toBeCloseTo(18.67, 1);
   });
 
-  it('depth 2 at 9999 px clamps at 8 px', () => {
-    expect(computeMemberColsGap({ depth: 2, containerWidth: 9999 })).toBe(8);
+  it('depth 1 at 1200 px = 28 px (proportional, hits new cap, same as depth-0)', () => {
+    expect(computeMemberColsGap({ depth: 1, containerWidth: 1200 })).toBe(28);
+  });
+
+  it('depth 2 at 9999 px clamps at 14 px (max)', () => {
+    expect(computeMemberColsGap({ depth: 2, containerWidth: 9999 })).toBe(14);
   });
 });
 
@@ -109,16 +125,14 @@ describe('computeMemberColsGap — floor (very narrow / very deep)', () => {
     expect(computeMemberColsGap({ depth: 3, containerWidth: 150 })).toBe(GAP_FLOOR);
   });
 
-  it('depth 4 at reference uses max 2 px even though < floor (effectiveFloor = min(3, 2) = 2)', () => {
-    // Edge case: depth 4 max (2 px) < floor (3 px). Resolution: floor is
-    // clamped to max so the gap doesn't exceed the depth's design ceiling.
-    // Stefan's "min 3 px oder so" treated as a guideline, not absolute —
-    // at depth 4 the design says "tighter than 3 px is acceptable".
-    expect(computeMemberColsGap({ depth: 4, containerWidth: GAP_REFERENCE_WIDTH })).toBe(2);
+  it('depth 4 at reference floors at 3 (R337 max 6 > floor 3 → floor wins for tiny raw)', () => {
+    // R337: max[4]=6 ≥ floor 3 → effectiveFloor = min(3, 6) = 3. Raw at
+    // reference: 0.25 * 8 = 2 → clamp(3, 6, 2) = 3.
+    expect(computeMemberColsGap({ depth: 4, containerWidth: GAP_REFERENCE_WIDTH })).toBe(3);
   });
 
-  it('depth 4 at very narrow clamps to max (= effective floor at this depth)', () => {
-    expect(computeMemberColsGap({ depth: 4, containerWidth: 50 })).toBe(2);
+  it('depth 4 at very narrow also floors at 3', () => {
+    expect(computeMemberColsGap({ depth: 4, containerWidth: 50 })).toBe(3);
   });
 });
 
@@ -174,16 +188,20 @@ describe('computeMemberColsGap — ratio preservation (mid-range values)', () =>
   // Verify the SCALING is proportional. At any single non-clamped width,
   // depth-d1 / depth-d2 = ratios[d1] / ratios[d2].
 
-  it('ratio depth-0 vs depth-1 at narrow width = ratios[0] / ratios[1]', () => {
+  it('ratio depth-0 vs depth-1 at any width = 1 (R337: depth-0 == depth-1)', () => {
+    // Stefan-2026-05-12 R337 (PA-0016): depth-0 and depth-1 are equal at
+    // every width (both are "any inter-group boundary"). Ratio = 1.
     const d0 = computeMemberColsGap({ depth: 0, containerWidth: 300 });
     const d1 = computeMemberColsGap({ depth: 1, containerWidth: 300 });
-    // d0 = 14, d1 = 7. 14/7 = 2.0 = 3.5/1.75 = 2.0. ✓
-    expect(d0 / d1).toBeCloseTo(GAP_RATIOS[0] / GAP_RATIOS[1], 5);
+    expect(d0).toBe(d1);
+    expect(GAP_RATIOS[0]).toBe(GAP_RATIOS[1]);
   });
 
-  it('ratio depth-1 vs depth-2 at narrow width = ratios[1] / ratios[2]', () => {
-    const d1 = computeMemberColsGap({ depth: 1, containerWidth: 400 });
-    const d2 = computeMemberColsGap({ depth: 2, containerWidth: 400 });
+  it('ratio depth-1 vs depth-2 at reference width = ratios[1] / ratios[2]', () => {
+    // R337: d1 = 14, d2 = 7 → ratio 2 = 1.75 / 0.875. Reference width 600
+    // avoids floor-clamp at depth-2.
+    const d1 = computeMemberColsGap({ depth: 1, containerWidth: GAP_REFERENCE_WIDTH });
+    const d2 = computeMemberColsGap({ depth: 2, containerWidth: GAP_REFERENCE_WIDTH });
     expect(d1 / d2).toBeCloseTo(GAP_RATIOS[1] / GAP_RATIOS[2], 5);
   });
 });
@@ -232,7 +250,9 @@ describe('resolveOverflow (R319-R322) — no overflow case (gap from R299, no ov
       baselineSliderWidth: 40,
     });
     expect(r.sliderOverride).toBeUndefined();
-    expect(r.gap).toBe(28);  // max-clamped at depth 0
+    // Stefan-2026-05-12 R337 (PA-0016): max cap at depth 0 = 28 (= 2×
+    // base ratio 1.75 × 8). At 1200 px (= 2× reference), gap reaches cap.
+    expect(r.gap).toBe(28);
   });
 
   it('handles n=1 (no slot, never overflows via gaps)', () => {
@@ -274,15 +294,17 @@ describe('resolveOverflow (R319-R322) — gap-shrink-first absorbs overflow (no 
   });
 
   it('forces gap shrink to non-floor when overflow exists but gap-fit ≥ floor', () => {
-    // Construct case where base-gap causes overflow but reducing to ~floor would fit.
-    // depth 0 at 200 px: base-gap = 9.33. 3 sliders @ 60 → needed = 180 + 18.67 = 198.67 ≤ 200 → no overflow.
-    // depth 0 at 195 px: base-gap = 9.1. needed = 180 + 18.2 = 198.2 > 195 → overflow.
-    // gapForFit = (195 - 180) / 2 = 7.5 ≥ floor(3) → use 7.5.
+    // Stefan-2026-05-12 R337 (PA-0016): post-R337 gaps are smaller at
+    // narrow widths, so the "overflow but gap-shrink fits" scenario needs
+    // bigger sliders + wider containers. Construct: depth-1 at 345 px,
+    // baseline 110 → base gap 8.05, needed = 330 + 16.1 = 346.1 > 345 →
+    // overflow. gapForFit = (345 - 330)/2 = 7.5 ≥ floor 3 → gap shrinks
+    // to 7.5 with no slider override.
     const r = resolveOverflow({
-      depth: 0,
-      containerWidth: 195,
+      depth: 1,
+      containerWidth: 345,
       childCount: 3,
-      baselineSliderWidth: 60,
+      baselineSliderWidth: 110,
     });
     expect(r.sliderOverride).toBeUndefined();
     expect(r.gap).toBeCloseTo(7.5, 2);

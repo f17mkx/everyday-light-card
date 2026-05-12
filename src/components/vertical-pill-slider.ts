@@ -6,7 +6,7 @@
  *
  * Geometry (matches Stefan's my-slider-v2 + card-mod baseline)
  *   --pill-width             slider width (default 60px)
- *   --pill-height            slider height (default 220px)
+ *   --pill-height            slider height (default 270px - Stefan 2026-05-12 PA-0002)
  *   --pill-half              = pill-width / 2
  *   --thumb-size             = pill-width * 0.8
  *   --range                  = pill-height - pill-width   (thumb-center travel distance)
@@ -731,7 +731,11 @@ export class EverydayVerticalPillSlider extends LitElement {
          fallback pattern, var(--everyday-slider-width, 60px) picks up
          the parent value when set, falls back to 60 when unset. */
       --pill-width: var(--everyday-slider-width, 60px);
-      --pill-height: var(--everyday-slider-height, 220px);
+      /* Stefan-2026-05-12 PA-0002: default bumped 220 -> 270. Stefan-Quote:
+         "the default slider length should be 270px". Affects single-light
+         + compact-host + parallel-inline + popup paths via the cascading
+         override chain. Explicit slider.height config still wins. */
+      --pill-height: var(--everyday-slider-height, 270px);
       --pill-half: calc(var(--pill-width) / 2);
       --thumb-size: calc(var(--everyday-slider-width, 60px) * 0.8);
       --color-thumb-border: calc((var(--everyday-slider-width, 60px) - var(--thumb-size)) / 2);
