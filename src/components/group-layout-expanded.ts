@@ -1759,9 +1759,38 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     // unchanged (still 150 px so the card stays the pre-expand height).
     // Resolution priority:
     //   1. explicit this.sliderHeight prop wins (user override)
-    //   2. expandInPlace + compact + _compactExpanded → 270 - 120 = 150 px
+    //   2. expandInPlace + compact + _compactExpanded → 270 - 77 = 193 px
     //   3. otherwise → 270 px (universal default since R346)
-    const EXPAND_IN_PLACE_TOPOLOGY_OVERHEAD = 120;
+    //
+    // Stefan-2026-05-13 R360 (PA-0021): OVERHEAD revised 120 → 77. The
+    // 120 number was a fudge factor that left both the slider-top and the
+    // group-icon-Y misaligned between compact and expanded modes — total
+    // expanded card was ~43 px shorter than compact, so `min-height: 380`
+    // + `justify-content: flex-end` pushed expanded content downward by
+    // 89 px on hall_spots (3 members) to fill the reserved space.
+    // Stefan-Quote PA-0021: "in expanded view the sliders top must at the
+    // same level as the collapsed sliders. here they are way below it.
+    // also the same issue with the icon alignment as with the parallel
+    // sliders".
+    //
+    // Derivation (R360):
+    //   compact total      = pad_top + sliderH_comp + gap_comp + tile.group + pad_bot
+    //                      = 24 + 270 + 12 + 69 + 24                          = 399
+    //   compact icon-Y     = pad_top + sliderH_comp + gap_comp + half_icon
+    //                      = 24 + 270 + 12 + 23                               = 329
+    //   expanded total     = pad_top + (sliderH_exp + member_col_gap + tile.member
+    //                                  + topology_gap + tile.group) + pad_bot
+    //                      = 24 + sliderH_exp + 8 + 57 + 24 + 69 + 24         = sliderH_exp + 206
+    //   expanded icon-Y    = pad_top + sliderH_exp + 8 + 57 + 24 + half_icon
+    //                      = 24 + sliderH_exp + 89 + 23                       = sliderH_exp + 136
+    //   set total match    →  sliderH_exp = 399 - 206 = 193
+    //   set icon-Y match   →  sliderH_exp = 329 - 136 = 193
+    // Both invariants resolve to the same target (193). OVERHEAD = 270 - 193 = 77.
+    // tile.member heights derive from `.tile.member { ic 34, gap 4, lbl 19 }`
+    // in group-layout-expanded.styles.ts:343-394; tile.group from `.tile.group
+    // .ic { 46x46 }` + gap-4 + lbl-19. If those CSS values change, this
+    // OVERHEAD has to recompute.
+    const EXPAND_IN_PLACE_TOPOLOGY_OVERHEAD = 77;
     const isInlineExpandedCompact = this.compact && this._compactExpanded;
     const effectiveSliderHeight = this.sliderHeight
       ?? (this.expandInPlace && isInlineExpandedCompact
@@ -2189,8 +2218,20 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       : null;
     const parentRow = this.hideParent ? null : groupRow;
     const topologyClass = `topology${this.showIcons ? '' : ' hide-icons'}`;
+    // Stefan-2026-05-13 R360 (PA-0021) follow-up: when expand_in_place is
+    // active AND we're rendering the inline-expanded state of a compact
+    // card, mark .layout with `expand-in-place-active` so the CSS rule
+    // can drop the legacy `min-height: 380px; justify-content: flex-end`
+    // pair. Pre-R360 the legacy values pushed the topology DOWN by 28-29
+    // px (HA's hui-card sized the parent to 430 px, content was 399 px,
+    // flex-end packed content to the bottom of the reserved space). The
+    // OVERHEAD math derivation assumes the host shrinks to content; this
+    // class removes the height-floor so the assumption holds.
+    const expandInPlaceActiveCls = isInlineExpandedCompact && this.expandInPlace
+      ? ' expand-in-place-active'
+      : '';
     return html`
-      <div class="layout" style=${sizeOverrides}>
+      <div class="layout${expandInPlaceActiveCls}" style=${sizeOverrides}>
         <div class=${topologyClass}>
           ${mindmapBg}
           ${parentRow === null

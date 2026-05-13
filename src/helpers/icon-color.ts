@@ -44,3 +44,34 @@ export function computeIconStateColor(
   }
   return `color: ${iconColorCfg};`;
 }
+
+/**
+ * Stefan-2026-05-13 PA-0020 (R353): state-aware border colour for the
+ * parallel-compact icon ring (`.parallel-compact-icon` border). Pre-R353
+ * the border was hardcoded `var(--mindmap-group-stroke, #f4b91d)` — gold
+ * regardless of state. Stefan-Quote PA-0020: "der dot um das icon
+ * gold/gelb ist (anstatt in state farbe)" — the dot around the icon is
+ * gold/yellow (instead of state color).
+ *
+ * Resolution matches the existing mindmap-path groupStroke logic for
+ * `.parallel-mindmap-icon` (group-dot SVG stroke in expanded view) but
+ * upgrades the no-RGB on-state fallback from gold to the theme's active
+ * icon color (`--paper-item-icon-active-color` → `--state-light-active-
+ * color` → orange #f88d2a). This way dim non-color lights also pick up
+ * the dashboard accent instead of staying brand-gold.
+ *
+ * Off state matches the mindmap-path arms FAINT_GRAY (`--disabled-color`)
+ * so a non-active group reads as faint without disappearing on light
+ * themes (the original gold default was theme-blind).
+ *
+ * Returns a pure CSS color value (not a `color:` declaration). Caller
+ * passes it via an inline custom property: `style=--icon-border-color: X`.
+ */
+export function computeIconBorderColor(
+  isOn: boolean,
+  rgb: [number, number, number] | undefined,
+): string {
+  if (!isOn) return 'var(--disabled-color, rgba(150, 150, 150, 0.55))';
+  if (rgb && rgb.length === 3) return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+  return 'var(--paper-item-icon-active-color, var(--state-light-active-color, #f88d2a))';
+}

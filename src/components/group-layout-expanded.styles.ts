@@ -159,6 +159,20 @@ export const GROUP_LAYOUT_EXPANDED_STYLES: CSSResult = css`
          clearance); r63e drops the asymmetry. */
       padding: 24px;
     }
+    /* Stefan-2026-05-13 R360 (PA-0021) follow-up: drop the legacy
+       min-height-380px-plus-justify-flex-end pair when an expand_in_place
+       card is currently in its inline-expanded state. Host renders with
+       this class added (see group-layout-expanded.ts _renderTopologyTree).
+       Without this, HA's hui-card was sizing the gle to 430 px even
+       though the layout content was 399 px → flex-end packed the topology
+       to the bottom, dropping slider-tops 29 px below the compact
+       slider-top. With min-height: 0 + flex-start, content sizes naturally
+       and slider-top sits at pad-top-24 matching compact.
+       R111-safe: no backticks in CSS comments. */
+    .layout.expand-in-place-active {
+      min-height: 0;
+      justify-content: flex-start;
+    }
     /* Stefan-2026-05-09 P42 R16 — group-icon-anchor stability across
        compact ↔ expanded transitions for the DEFAULT 'bottom' icon-position.
        Root cause of the recurring bug: with default flex-column flow, the

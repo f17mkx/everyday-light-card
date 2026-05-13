@@ -1,7 +1,17 @@
 name: HACS Validation
 
+# Stefan-2026-05-13 PA-0021 (R356): guard against running on the private
+# dev mirror (superpro-light-card-dev → soon everyday-light-card-dev). HACS
+# validation is only meaningful on the public f17mkx/everyday-light-card
+# repo where HACS actually serves the card. On the dev repo every push
+# triggered a workflow notification with no actionable value (Stefan-Quote
+# PA-0021: "i always get these. can we please disable the hacs things for
+# this repo"). manual workflow_dispatch is still allowed everywhere so we
+# can ad-hoc validate the dev tree before a publish-sync.
 on:
   push:
+    branches:
+      - main
   pull_request:
   schedule:
     - cron: "0 0 * * *"
@@ -9,6 +19,10 @@ on:
 
 jobs:
   hacs:
+    # Run only on the public mirror. On dev repos the job is skipped via
+    # the if-expression at the job level (workflow-level `if:` is not
+    # supported by GitHub Actions yet, so we guard per-job).
+    if: github.repository == 'f17mkx/everyday-light-card'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

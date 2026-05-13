@@ -121,6 +121,26 @@ export class EverydayMindmapPath extends LitElement {
   @property({ type: Number, attribute: 'tile-gap' }) tileGap = 0;
 
   /**
+   * Stefan-2026-05-13 PA-0020 (R355): pixel width of each parallel-slider
+   * sibling. When set, `_memberXs` switches from the CSS-grid equal-cols
+   * formula to a flex-row-with-`gap`-and-`justify-content: space-around`
+   * formula that exactly mirrors the parallel-slider-row's layout. This is
+   * required for `.parallel-mindmap-area` (parallel-inline expanded view)
+   * because that row uses flex+space-around with `gap: 14px` (R350), NOT a
+   * CSS grid — at narrow widths where total slider content (N * s + (N-1) * g)
+   * exceeds the row width, the sliders OVERFLOW flush-left with a constant
+   * 14 px between-gap while the row width stays at 100% of the container.
+   * The legacy equal-cols formula `(i + 0.5)/n × W` keeps shrinking arm-X's
+   * past the constant slider centers, so the mindmap arms detach from their
+   * sliders. Stefan-Quote PA-0020: "Der abstand zwischen den paralell slidern
+   * bleibt konstant, während die mindmap arme, die zu den slidern führen
+   * immer enger werden". When undefined → legacy formula (no behaviour
+   * change for the group-layout-expanded topology-bg + standalone test page).
+   * Pairs with `tileGap` (= the flex `gap` value, typically 14 here).
+   */
+  @property({ type: Number, attribute: 'slider-width' }) sliderWidth?: number;
+
+  /**
    * Stefan-2026-05-11 (R234b): per-member-dot-radius override. When set,
    * `memberRadii[i]` is used for the i-th member dot instead of
    * DEFAULT_MEMBER_R. Used by group-layout-expanded to draw bigger dots
@@ -361,6 +381,57 @@ export class EverydayMindmapPath extends LitElement {
       return xs;
     }
     const gap = this.tileGap;
+    // Stefan-2026-05-13 PA-0020 (R355): flex-row-space-around-with-gap branch.
+    // When `sliderWidth` is supplied, mirror the CSS flex layout used by
+    // .parallel-slider-row (`display: flex; gap: G; justify-content: space-
+    // around`). Two regimes:
+    //   1. W >= content-width (= n*s + (n-1)*g): free space distributed by
+    //      space-around — endmost padding E = free/(2n), between-padding
+    //      2E + gap. Slider centers at E*(2i+1) + (i+0.5)*s + i*g.
+    //   2. W < content-width: row overflows flush-left, sliders pinned at
+    //      `i*(s+g) + s/2`. This is the case Stefan flagged — pre-R355 the
+    //      legacy equal-cols formula kept shrinking the mindmap-X past the
+    //      now-constant slider centers, detaching the arms from the sliders.
+    // Weighted-cols + sliderWidth would be ambiguous (no real-world config
+    // uses both), so weighted takes precedence below when present.
+    //
+    // Stefan-2026-05-13 R364 (PA-0022): use the effective `--everyday-slider-
+    // width` CSS var from this host's computed style when present, falling
+    // back to the static prop. Pre-R364 the prop was set from cfg.slider?.width
+    // ?? 60 at the parent's render time and stayed at 60 even after R349
+    // sibling-coordination shrunk the actual rendered slider to 44 px (nested
+    // narrow contexts). Result: the overflow formula computed xs from s=60
+    // (content-width 134), so arm endpoints landed at i*74+30 = [30, 104]
+    // while the actual 44-px sliders had centers at [22, 80] — 8-24 px
+    // detachment per arm (Stefan-Quote PA-0022: "the arms are now again kinda
+    // more detached"). The CSS var cascades through shadow DOM boundaries
+    // (default for custom properties), so this host always sees the same
+    // value the slider component uses. We re-read on every render — cheap,
+    // and naturally tracks ResizeObserver-driven re-renders so the arm
+    // endpoints follow the actual slider widths as they shrink/grow.
+    const cssSliderWidthRaw = parseFloat(
+      getComputedStyle(this).getPropertyValue('--everyday-slider-width'),
+    );
+    const effectiveSliderWidth = Number.isFinite(cssSliderWidthRaw) && cssSliderWidthRaw > 0
+      ? cssSliderWidthRaw
+      : this.sliderWidth;
+    if (effectiveSliderWidth !== undefined && effectiveSliderWidth > 0 && !this._isWeighted()) {
+      const s = effectiveSliderWidth;
+      const contentW = n * s + (n - 1) * gap;
+      if (W >= contentW) {
+        const E = (W - contentW) / (2 * n);
+        const xs: number[] = [];
+        for (let i = 0; i < n; i++) {
+          xs.push(E * (2 * i + 1) + (i + 0.5) * s + i * gap);
+        }
+        return xs;
+      }
+      const xs: number[] = [];
+      for (let i = 0; i < n; i++) {
+        xs.push(i * (s + gap) + s / 2);
+      }
+      return xs;
+    }
     // Stefan-2026-05-11 R255: weighted-cols branch. When the parent's
     // grid-template-columns is `8fr 6fr` (etc), the columns aren't equal
     // width — so equal-distribution member-X clusters the dots away from

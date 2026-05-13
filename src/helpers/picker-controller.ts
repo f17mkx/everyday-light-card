@@ -170,6 +170,15 @@ export interface PickerControllerOptions {
    */
   hasCollapseProvider?: () => boolean;
   /**
+   * Stefan-2026-05-13 PA-0021 (R358): provider for `noParallelMindmap`
+   * passed to mode-picker + picker-geometry. When true, the parallel-
+   * inline picker drops its `mindmap` slot (which would orbit but no-op
+   * on a single-light render). Provider pattern so the host can flip the
+   * flag per-render branch (parallel-render true → false, single-light
+   * fallback → true) without re-instantiating the controller.
+   */
+  noParallelMindmapProvider?: () => boolean;
+  /**
    * Stefan-2026-05-12 R342 (PA-0017): provider for the parallel-inline
    * expanded-state flag. Drives the mindmap-slot glyph swap — when the
    * parallel layout is currently expanded (multi-axis sliders visible),
@@ -460,6 +469,11 @@ export class PickerController implements ReactiveController {
             useMindmap: this.opts.useMindmapProvider?.() ?? false,
             additionalMindmap: this.opts.additionalMindmapProvider?.() ?? false,
             hasCollapse: this.opts.hasCollapseProvider?.() ?? false,
+            // Stefan-2026-05-13 PA-0021 (R358): single-light render paths set
+            // this provider to true so the hit-test agrees with the slot list
+            // (mindmap dropped) — otherwise dragging where mindmap *would* be
+            // returns 'mindmap' even though the renderer skipped that dot.
+            noParallelMindmap: this.opts.noParallelMindmapProvider?.() ?? false,
           },
         );
         this.host.requestUpdate();
@@ -662,6 +676,7 @@ export class PickerController implements ReactiveController {
         .additionalMindmap=${this.opts.additionalMindmapProvider?.() === true}
         .hasCollapse=${this.opts.hasCollapseProvider?.() === true}
         .parallelExpanded=${this.opts.parallelExpandedProvider?.() === true}
+        .noParallelMindmap=${this.opts.noParallelMindmapProvider?.() === true}
         @mode-pick=${this._onModePick}
         @click=${(ev: Event) => ev.stopPropagation()}
       ></everyday-mode-picker>

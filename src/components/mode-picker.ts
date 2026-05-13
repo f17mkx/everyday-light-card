@@ -174,6 +174,20 @@ export class EverydayModePicker extends LitElement {
   @property({ type: Boolean, attribute: 'has-collapse' }) hasCollapse = false;
 
   /**
+   * Stefan-2026-05-13 PA-0021 (R358): drop the 'mindmap' slot from the
+   * `parallel-inline` variant. Set true when the host renders this picker
+   * for a single-light context (no parallel-mode active, no group to
+   * expand) — the mindmap glyph would orbit but its callback is a no-op.
+   * Stefan-Quote PA-0021: "When the mode picker would have no effect it
+   * should not be displayed". everyday-light-card.ts shares one
+   * PickerController across the parallel-render branch + single-light
+   * fallback paths; this flag gives the per-render call site a way to
+   * say "hide mindmap here". Default false (legacy behaviour preserves
+   * mindmap on every parallel-inline picker).
+   */
+  @property({ type: Boolean, attribute: 'no-parallel-mindmap' }) noParallelMindmap = false;
+
+  /**
    * Stefan-2026-05-12 R342 (PA-0017): true when the parallel-inline layout
    * is currently EXPANDED (multi-axis sliders side-by-side). Drives the
    * glyph swap on the `mindmap` slot in the parallel-inline variant —
@@ -480,6 +494,7 @@ export class EverydayModePicker extends LitElement {
       useMindmap: this.useMindmap,
       additionalMindmap: this.additionalMindmap,
       hasCollapse: this.hasCollapse,
+      noParallelMindmap: this.noParallelMindmap,
     });
     const angleMap = getPickerAngleMap(v, {
       hasEffects: this.hasEffects,
@@ -487,6 +502,7 @@ export class EverydayModePicker extends LitElement {
       useMindmap: this.useMindmap,
       additionalMindmap: this.additionalMindmap,
       hasCollapse: this.hasCollapse,
+      noParallelMindmap: this.noParallelMindmap,
     });
     const slotMeta: Record<string, Omit<PickerOption, 'angleDeg'>> = {
       wheel: { mode: 'wheel', label: wheel.label, iconPath: wheel.iconPath },

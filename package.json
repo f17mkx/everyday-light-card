@@ -1,6 +1,6 @@
 {
   "name": "everyday-light-card",
-  "version": "1.0.2",
+  "version": "1.0.7",
   "description": "Group-aware Lovelace light card with mindmap-path topology, in-place mode picker, saved-colors edit mode, and runtime-rotatable gestures. Brand: everyday by f17mkx.",
   "main": "dist/everyday-light-card.js",
   "type": "module",

@@ -23,7 +23,7 @@ import './components/mode-picker.js';
 import { resolveGroup } from './helpers/group-detection.js';
 import { PickerController } from './helpers/picker-controller.js';
 import { POPUP_PORTAL_STYLES } from './helpers/popup-portal-styles.js';
-import { computeIconStateColor } from './helpers/icon-color.js';
+import { computeIconStateColor, computeIconBorderColor } from './helpers/icon-color.js';
 import type { ColorTuple, ColorEntry } from './components/saved-colors-picker.js';
 import {
   readSavedColorsFromSource,
@@ -49,7 +49,7 @@ const DEFAULT_PARALLEL_SAVED_COLORS: ColorTuple[] = [
   [200, 100, 220],  // purple
 ];
 
-const VERSION = '1.0.2';
+const VERSION = '1.0.7';
 
 console.info(
   `%c EVERYDAY-LIGHT-CARD %c v${VERSION} `,
@@ -232,6 +232,27 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       const configCompact = this.config?.parallel_sliders?.layout === 'compact';
       const effectiveCompact = this._parallelInlineCompactRuntime ?? configCompact;
       return !effectiveCompact;  // expanded = NOT compact
+    },
+    // Stefan-2026-05-13 PA-0021 (R358): the picker is constructed with
+    // variant='parallel-inline' but the host reuses it across BOTH the
+    // parallel-render branch AND every single-light branch
+    // (vertical/horizontal/speaker). On single-light renders the mindmap
+    // slot orbits with no behavioural target — picking it just no-ops.
+    // Return true when the current config wouldn't take the parallel-
+    // render branch at line ~981 (`default_view_mode === 'parallel'` AND
+    // domain==='light' AND modes.length !== 1). Stefan-Quote PA-0021:
+    // "When the mode picker would have no effect it should not be
+    // displayed". Provider read at render-time → reactive to config edit.
+    noParallelMindmapProvider: () => {
+      const cfg = this.config;
+      if (!cfg) return true;
+      const isParallel = cfg.default_view_mode === 'parallel';
+      const domain = (cfg.entity ?? '').split('.')[0];
+      const modesLen = cfg.parallel_sliders?.modes?.length;
+      // Same condition as line ~981 parallel-render branch:
+      //   isParallel && domain==='light' && modes !== 1
+      const parallelBranchActive = isParallel && domain === 'light' && modesLen !== 1;
+      return !parallelBranchActive;
     },
   });
 
@@ -684,7 +705,57 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
         this._pickerPortal,
       );
     }
+    // Stefan-2026-05-13 R361 (PA-0021): emit visible-leaf-count-change
+    // when the parallel-render branch is active so the parent
+    // <everyday-group-layout-expanded> can give this card a wider col-
+    // share. Pre-r361 an embedded parallel-inline-expanded leaf reported
+    // weight=1 (HA-state had no group_entities, so _countLeavesForEntity
+    // fell through to "single light"). When boxes flipped to expanded
+    // (2 sliders side-by-side), it kept its 1-slider col-share — the
+    // second slider overflowed the col and overlapped the next member
+    // (Stefan-Quote PA-0021: "the temp slider is overlapping with the
+    // hall door slider when the window gets narrower"). Mindmap arms
+    // also went asymmetric because groupX (= col-center = W/2 of a
+    // 1-slider col) was off-center from the actual midpoint between the
+    // two overflowing sliders.
+    //
+    // Fix: emit the same `visible-leaf-count-change` event that
+    // group-layout-expanded fires when its `_compactExpanded` flips.
+    // The parent's existing _onChildVisibleLeafCountChange catches it,
+    // caches in _childVisibleLeafCounts, and recomputes
+    // gridTemplateColumns with the new weight (2 instead of 1). Idempotent
+    // — we track _lastEmittedVisibleLeafCount so we don't fire the same
+    // value twice per updated() tick.
+    if (this.config && this.embedded) {
+      const cfg = this.config;
+      const domain = (cfg.entity ?? '').split('.')[0];
+      const isParallel = cfg.default_view_mode === 'parallel' && domain === 'light';
+      const modesLen = cfg.parallel_sliders?.modes?.length;
+      if (isParallel && modesLen !== 1) {
+        const configCompact = cfg.parallel_sliders?.layout === 'compact';
+        const effectiveCompact = this._parallelInlineCompactRuntime ?? configCompact;
+        // count = number of slider columns this card currently occupies
+        // → compact 1 brightness slider = 1; expanded N modes = N.
+        const count = effectiveCompact ? 1 : (modesLen ?? 4);
+        if (this._lastEmittedVisibleLeafCount !== count) {
+          this._lastEmittedVisibleLeafCount = count;
+          this.dispatchEvent(new CustomEvent('visible-leaf-count-change', {
+            bubbles: true,
+            composed: true,
+            detail: { count },
+          }));
+        }
+      }
+    }
   }
+
+  /**
+   * Stefan-2026-05-13 R361 (PA-0021): per-instance memo of the last
+   * count emitted in updated() so we don't fire duplicate events on
+   * idempotent re-renders (which would cost the parent unnecessary
+   * grid-template recomputes). Reset to undefined on disconnect.
+   */
+  private _lastEmittedVisibleLeafCount?: number;
 
   /**
    * Stefan-2026-05-10 P15.6-r28: render the effects-list-picker popup when
@@ -1020,17 +1091,90 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       // anderen!". When the config opts into compact AND expand_in_place,
       // and the user toggles to expanded via the mindmap picker slot,
       // SHRINK the slider so the card's total height stays where it was
-      // in compact mode. Math: compact overhead ≈ 95 px (pad 8+8 + icon
-      // 46 + gap 8 + caption 25), expanded overhead ≈ 163 px (pad 24+24
-      // + mindmap-area 90 + caption 25). Diff ≈ 68 px → expanded slider
-      // shrinks by 68 to compensate. Floor 80 px to keep usable.
+      // in compact mode.
+      //
+      // Stefan-2026-05-13 R359 (PA-0021): math revised so the ICON ALSO
+      // stays put across the toggle, not just the card-total height.
+      // Stefan-Quote PA-0021: "in expanded mode the icon is a little bit
+      // higher (the icon in the expanded view and in the collapsed view
+      // should be in the same position though)". R347 had DIFF=68 which
+      // kept total-height matched but moved the icon up by 23 px because
+      // the expanded layout buries the icon inside the 90-tall
+      // .parallel-mindmap-area at top:60 (groupY=60) while compact has
+      // it stacked below the slider at sliderH + gap-8 + half-icon-23 =
+      // sliderH + 31 from card-top (plus 8 pad-top = sliderH + 39).
+      //
+      // Derivation (R359):
+      //   compact icon-Y      = pad_top_compact + sliderH        + gap_compact + half_icon
+      //                       = 8                + sliderH        + 8           + 23
+      //                       = sliderH + 39
+      //   expanded icon-Y     = pad_top_exp     + sliderH_exp    + iconY_in_area
+      //                       = 24              + sliderH_exp    + iconY_in_area
+      //   compact total       = pad_top + sliderH + gap + icon + gap + caption + pad_bot
+      //                       = 8 + sliderH + 8 + 46 + 8 + 25 + 8 = sliderH + 103
+      //   expanded total      = pad_top + sliderH_exp + area_h + caption + pad_bot
+      //                       = 24 + sliderH_exp + 90 + 25 + 24 = sliderH_exp + 163
+      //   Set total_compact = total_expanded   →   sliderH_exp = sliderH - 60   ⇒ DIFF = 60
+      //   Set icon-Y match                     →   24 + sliderH_exp + iconY_in_area = sliderH + 39
+      //                                        →   iconY_in_area = 75
+      // Both invariants resolved by changing DIFF 68 → 60 AND shifting the
+      // expanded icon position (.parallel-mindmap-icon top: + groupYOverride
+      // passed to <everyday-mindmap-path>) from 60 to 75. The shift is
+      // wired in the parallelInner template + CSS rule below.
       const expandInPlaceParallel = cfg.group?.expand_in_place === true;
       const configWasCompact = cfg.parallel_sliders?.layout === 'compact';
       const isCurrentlyExpanded = !parallelLayoutIsCompact;
-      const PARALLEL_EXPAND_IN_PLACE_DIFF = 68;
-      const sliderH = (expandInPlaceParallel && configWasCompact && isCurrentlyExpanded)
+      // Stefan-2026-05-13 R362 (PA-0022): DIFF recomputed 60 -> 28 after
+      // bumping .parallel-compact-layout padding 8 -> 24 AND dropping the
+      // .parallel-mindmap-layout > .caption margin-top:6 (both in the CSS
+      // block below). New derivation (all values in px):
+      //   compact total = pad-top + slider + gap + icon + gap + caption + pad-bot
+      //                 = 24 + sliderH + 8 + 46 + 8 + 25 + 24      = sliderH + 135
+      //   expanded total = pad-top + sliderH_exp + area_h + caption + pad-bot
+      //                  = 24 + sliderH_exp + 90 + 25 + 24         = sliderH_exp + 163
+      //   total match    → sliderH_exp = sliderH - 28               ⇒ DIFF = 28
+      //   compact icon-Y   = pad-top + sliderH + gap + half-icon
+      //                    = 24 + sliderH + 8 + 23                  = sliderH + 55
+      //   expanded icon-Y  = 24 + sliderH_exp + iconY_in_area
+      //   icon-Y match     → iconY_in_area = 59 ≈ 60 (legacy default)
+      //   compact label-Y  = pad-top + sliderH + gap + icon + gap   = sliderH + 86
+      //   expanded label-Y = 24 + sliderH_exp + 90                  = sliderH_exp + 114
+      //   label-Y match    → sliderH_exp = sliderH - 28              ⇒ same DIFF
+      // All three invariants (total, icon-Y, label-Y) resolve to the same
+      // sliderH_exp target. iconY_in_area returns to its legacy 60 default
+      // (no longer needs the 75 shift from R359).
+      const PARALLEL_EXPAND_IN_PLACE_DIFF = 28;
+      // Stefan-2026-05-13 R363 (PA-0022): widened the expand_in_place gate.
+      // Pre-r363 the shrink required BOTH `expand_in_place: true` AND
+      // `parallel_sliders.layout: compact` (the original compact-card use
+      // case from R347/R359). Stefan-Quote PA-0022 (config7-main card):
+      // "since the config says 'group: expand_in_place: true' i would expect
+      // that the expand_in_place logic would also apply to the paralell
+      // slider [...] just implement it for now to work like that and for
+      // later we will find a better naming convention". The card starts as
+      // parallel-inline-EXPANDED (no `layout: compact` configured), user
+      // mindmap-picks down to compact → without the wider gate, the compact
+      // height grew to baseSliderH + 103 = 373 px (no shrink) instead of
+      // matching what an explicit `layout: compact` would produce. r363
+      // gates on `expandInPlaceParallel + isCurrentlyExpanded` ALONE for
+      // the shrink direction — the math (DIFF 60) still keeps total +
+      // icon-Y matched whenever the user toggles between modes.
+      // configWasCompact stays referenced for backwards-compat clarity
+      // but no longer blocks the shrink.
+      const expandInPlaceShrinkActive = expandInPlaceParallel && isCurrentlyExpanded;
+      const sliderH = expandInPlaceShrinkActive
         ? Math.max(80, baseSliderH - PARALLEL_EXPAND_IN_PLACE_DIFF)
         : baseSliderH;
+      // Stefan-2026-05-13 R359 (PA-0021): groupY override (= icon-center Y
+      // inside .parallel-mindmap-area). Default 60 for standalone parallel-
+      // inline-expanded (no expand_in_place). R359 had to shift to 75 with
+      // the previous pad-top:8 + DIFF:60 math to keep icon-Y matched.
+      // Stefan-2026-05-13 R362 (PA-0022): the new pad-top:24 + DIFF:28
+      // math derived above makes iconY_in_area = 59 ≈ 60 — so the legacy
+      // 60 default works for ALL paths (with or without expand_in_place).
+      // No more conditional shift; cleaner. R363 gate widening still in
+      // effect for the slider-height shrink so config7-main also benefits.
+      const parallelGroupY = 60;
       const labelTitle = cfg.name ?? (stateObj.attributes.friendly_name as string | undefined) ?? cfg.entity;
       const userIcon = cfg.icon;
       const haIcon = stateObj.attributes.icon as string | undefined;
@@ -1048,6 +1192,15 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       // See computeIconStateColor helper at top of file.
       const _bri = stateObj.attributes.brightness as number | undefined;
       const parallelIconStateColor = computeIconStateColor(cfg.icon_color, isOn, rgb, _bri);
+      // Stefan-2026-05-13 PA-0020 (R353): state-aware ring colour for the
+      // parallel-compact-icon HTML border. Pre-R353 the border was hardcoded
+      // gold (`--mindmap-group-stroke`) regardless of state. Stefan-Quote
+      // PA-0020: "der dot um das icon gold/gelb ist (anstatt in state farbe)".
+      // Piped through `--icon-border-color` so the CSS rule can fall back to
+      // the legacy gold default when this style is absent (e.g., test pages
+      // that render the icon outside the state-aware everyday-light-card host).
+      const parallelIconBorderColor = computeIconBorderColor(isOn, rgb);
+      const parallelIconCombinedStyle = `${parallelIconStateColor} --icon-border-color: ${parallelIconBorderColor};`;
       // Stefan-2026-05-09 P47-fix R58: parallel-inline mindmap-layout
       // restructured. SVG renders the groupDot circle (state-reactive,
       // gold/rgb stroke) AND the curves. HTML icon-glyph overlays the
@@ -1095,7 +1248,7 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
               </div>
               <ha-state-icon
                 class="parallel-compact-icon ${isOn ? 'active' : ''}"
-                style=${parallelIconStateColor}
+                style=${parallelIconCombinedStyle}
                 data-interactive=${cfg.gestures?.member_icon ? 'true' : null}
                 .hass=${this.hass}
                 .stateObj=${stateObj}
@@ -1124,21 +1277,26 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
                   `,
                 )}
               </div>
-              <div class="parallel-mindmap-area">
+              <div
+                class="parallel-mindmap-area"
+                style=${`--parallel-mindmap-group-y: ${parallelGroupY}px;`}
+              >
                 <everyday-mindmap-path
                   class="parallel-mindmap-bg"
                   aria-hidden="true"
                   .members=${mindmapMembers}
                   .dotsEnabled=${false}
                   .groupDotEnabled=${true}
-                  .groupYOverride=${60}
+                  .groupYOverride=${parallelGroupY}
                   .memberYOverride=${10}
                   .groupOn=${isOn}
                   .groupRgb=${rgb}
+                  .tileGap=${14}
+                  .sliderWidth=${cfg.slider?.width ?? 60}
                 ></everyday-mindmap-path>
                 <ha-state-icon
                   class="parallel-mindmap-icon ${isOn ? 'active' : ''}"
-                  style=${parallelIconStateColor}
+                  style=${parallelIconCombinedStyle}
                   .hass=${this.hass}
                   .stateObj=${stateObj}
                   .icon=${iconName}
@@ -1336,33 +1494,36 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
         }
       })();
       const speakerIcon = this.config.icon ?? (stateObj.attributes.icon as string | undefined) ?? 'mdi:speaker';
-      return html`
-        <ha-card class="speaker-row-card">
-          <div class="speaker-row v2 ${isPlaying ? 'playing' : ''}" style=${sliderStyles}>
-            <ha-state-icon class="speaker-icon" .stateObj=${stateObj} .icon=${speakerIcon}></ha-state-icon>
-            <div class="speaker-name-col">
-              <span class="speaker-name">${label}</span>
-              ${stateLabel ? html`<span class="speaker-state">${stateLabel}</span>` : ''}
-            </div>
-            <everyday-vertical-pill-slider
-              class="speaker-slider"
-              .hass=${this.hass}
-              .entity=${this.config.entity}
-              .mode=${'volume'}
-              .orientation=${'horizontal'}
-              .styleVariant=${'mixer'}
-            ></everyday-vertical-pill-slider>
-            <button class="speaker-btn" type="button" @click=${onMinus} aria-label="Volume down">−</button>
-            <button class="speaker-btn" type="button" @click=${onPlus} aria-label="Volume up">+</button>
-            <button
-              class="speaker-btn play-pause"
-              type="button"
-              @click=${onPlayPause}
-              aria-label=${isPlaying ? 'Pause' : 'Play'}
-            >${isPlaying ? '⏸' : '▶'}</button>
+      const speakerContent = html`
+        <div class="speaker-row v2 ${isPlaying ? 'playing' : ''}" style=${sliderStyles}>
+          <ha-state-icon class="speaker-icon" .stateObj=${stateObj} .icon=${speakerIcon}></ha-state-icon>
+          <div class="speaker-name-col">
+            <span class="speaker-name">${label}</span>
+            ${stateLabel ? html`<span class="speaker-state">${stateLabel}</span>` : ''}
           </div>
-        </ha-card>
+          <everyday-vertical-pill-slider
+            class="speaker-slider"
+            .hass=${this.hass}
+            .entity=${this.config.entity}
+            .mode=${'volume'}
+            .orientation=${'horizontal'}
+            .styleVariant=${'mixer'}
+          ></everyday-vertical-pill-slider>
+          <button class="speaker-btn" type="button" @click=${onMinus} aria-label="Volume down">−</button>
+          <button class="speaker-btn" type="button" @click=${onPlus} aria-label="Volume up">+</button>
+          <button
+            class="speaker-btn play-pause"
+            type="button"
+            @click=${onPlayPause}
+            aria-label=${isPlaying ? 'Pause' : 'Play'}
+          >${isPlaying ? '⏸' : '▶'}</button>
+        </div>
       `;
+      // Stefan-2026-05-13 PA-0020 (R354): mirror the embedded short-circuit
+      // applied to the other single-light return paths. Embedded speaker-row
+      // tiles drop their ha-card chrome so the row aligns with sibling cols.
+      if (this.embedded === true) return speakerContent;
+      return html`<ha-card class="speaker-row-card">${speakerContent}</ha-card>`;
     }
 
     // Stefan-2026-05-09 P47-fix: single-entity card now renders an icon
@@ -1387,43 +1548,57 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
     const _rgb = stateObj.attributes.rgb_color as [number, number, number] | undefined;
     const _bri = stateObj.attributes.brightness as number | undefined;
     const iconStateColor = computeIconStateColor(this.config.icon_color, isOn, _rgb, _bri);
+    // Stefan-2026-05-13 PA-0021 (R357): state-reactive ring for the
+    // .caption .single-icon. Mirrors the R353 fix for .parallel-compact-icon
+    // — Stefan-Quote PA-0021: "the mindmap dot around the icon needs to be
+    // in state color (as described previously)". Single-icon was an
+    // oversight in the R353 pass since it's the same visual identity (dark
+    // dot + ring) used across compact-collapsed groups, parallel-inline-
+    // compact AND single-light. Combined style string set on the icon
+    // element below; CSS rule at .caption .single-icon reads the var.
+    const singleIconBorderColor = computeIconBorderColor(isOn, _rgb);
+    const singleIconCombinedStyle = `${iconStateColor} --icon-border-color: ${singleIconBorderColor};`;
 
     // Stefan-2026-05-09 P47-fix R47: horizontal-orientation gets a row layout
     // with [icon | slider | name+state] — same inline-expand-style geometry
     // as the speaker-row mixer card but without the volume buttons. Vertical
     // orientation keeps the original column layout (slider + caption below).
     if (orientation === 'horizontal') {
-      return html`
-        <ha-card class="hpill-card">
-          <div class="hpill-row" style=${sliderStyles}>
-            <div class="single-icon-wrap">
-              <ha-icon class="single-icon ${isOn ? 'active' : ''}" icon=${iconName} style=${iconStateColor}></ha-icon>
-              <!-- Stefan-2026-05-11 P15.6-r63e (R301 / PA-0032): see comment
-                   on the vertical-orientation render for rationale. Single-
-                   icon must own a picker overlay slot for long-press to
-                   render anything. -->
-              <div class="single-picker">${this._picker.renderPicker()}</div>
-            </div>
-            <everyday-vertical-pill-slider
-              class="hpill-slider"
-              .hass=${this.hass}
-              .entity=${this.config.entity}
-              .mode=${mode}
-              .orientation=${'horizontal'}
-              .styleVariant=${styleVariant}
-            ></everyday-vertical-pill-slider>
-            <div class="hpill-caption">
-              <span class="name">${label}</span>
-              <!-- Stefan-2026-05-12 R324 (PA-0005): drop on/off from state-line.
-                   Keep mode-suffix when mode is not default brightness, since
-                   that conveys real info (which slider axis is active). -->
-              ${mode === 'temperature' || mode === 'volume'
-                ? html`<span class="state">${mode === 'temperature' ? 'temp' : 'vol'}</span>`
-                : ''}
-            </div>
+      const hpillContent = html`
+        <div class="hpill-row" style=${sliderStyles}>
+          <div class="single-icon-wrap">
+            <ha-icon class="single-icon ${isOn ? 'active' : ''}" icon=${iconName} style=${singleIconCombinedStyle}></ha-icon>
+            <!-- Stefan-2026-05-11 P15.6-r63e (R301 / PA-0032): see comment
+                 on the vertical-orientation render for rationale. Single-
+                 icon must own a picker overlay slot for long-press to
+                 render anything. -->
+            <div class="single-picker">${this._picker.renderPicker()}</div>
           </div>
-        </ha-card>
+          <everyday-vertical-pill-slider
+            class="hpill-slider"
+            .hass=${this.hass}
+            .entity=${this.config.entity}
+            .mode=${mode}
+            .orientation=${'horizontal'}
+            .styleVariant=${styleVariant}
+          ></everyday-vertical-pill-slider>
+          <div class="hpill-caption">
+            <span class="name">${label}</span>
+            <!-- Stefan-2026-05-12 R324 (PA-0005): drop on/off from state-line.
+                 Keep mode-suffix when mode is not default brightness, since
+                 that conveys real info (which slider axis is active). -->
+            ${mode === 'temperature' || mode === 'volume'
+              ? html`<span class="state">${mode === 'temperature' ? 'temp' : 'vol'}</span>`
+              : ''}
+          </div>
+        </div>
       `;
+      // Stefan-2026-05-13 PA-0020 (R354): mirror the embedded short-circuit
+      // applied to the vertical single-light path below. Embedded horizontal-
+      // pill single-light leaves drop their ha-card chrome so the row sits
+      // flush in the parent member-col without a second card surface.
+      if (this.embedded === true) return hpillContent;
+      return html`<ha-card class="hpill-card">${hpillContent}</ha-card>`;
     }
 
     // Stefan-2026-05-09 P47-fix R62: revert single-entity to the simple
@@ -1437,48 +1612,62 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
     // default) shows no icon. ha-state-icon resolves the entity-registry
     // icon (e.g. user's mdi:track-light customization); `.icon` is the
     // resolved fallback chain (config.icon | state.attr.icon | domain default).
-    return html`
-      <ha-card>
-        <div class="container ${orientation}" style=${sliderStyles}>
-          <everyday-vertical-pill-slider
-            .hass=${this.hass}
-            .entity=${this.config.entity}
-            .mode=${mode}
-            .orientation=${orientation}
-            .styleVariant=${styleVariant}
-          ></everyday-vertical-pill-slider>
-          <div class="caption">
-            <div class="single-icon-wrap">
-              <ha-state-icon
-                class="single-icon ${isOn ? 'active' : ''}"
-                data-interactive=${this.config.gestures?.member_icon ? 'true' : null}
-                style=${iconStateColor}
-                .hass=${this.hass}
-                .stateObj=${stateObj}
-                .icon=${iconName}
-              ></ha-state-icon>
-              <!-- Stefan-2026-05-11 P15.6-r63e (R301 / PA-0032): mount the
-                   picker overlay here so long-press on the .single-icon has
-                   a DOM container to render its 4-option ring into.
-                   Pre-r63e: r62 R289 wired bindIcon(.single-icon) so the
-                   gesture detector DID fire, but renderPicker() was only
-                   rendered in the parallel-mode path — long-press silently
-                   opened a picker that had nowhere to show. Same picker
-                   instance as the parallel-mode mount, just positioned
-                   around the single-icon when this render path is active. -->
-              <div class="single-picker">${this._picker.renderPicker()}</div>
-            </div>
-            <span class="name">${label}</span>
-            <!-- Stefan-2026-05-12 R324 (PA-0005): drop on/off from state-line.
-                 Keep mode-suffix when mode is not default brightness, since
-                 that conveys real info (which slider axis is active). -->
-            ${mode === 'temperature' || mode === 'volume'
-              ? html`<span class="state">${mode === 'temperature' ? 'temp' : 'vol'}</span>`
-              : ''}
+    const singleLightContent = html`
+      <div class="container ${orientation}" style=${sliderStyles}>
+        <everyday-vertical-pill-slider
+          .hass=${this.hass}
+          .entity=${this.config.entity}
+          .mode=${mode}
+          .orientation=${orientation}
+          .styleVariant=${styleVariant}
+        ></everyday-vertical-pill-slider>
+        <div class="caption">
+          <div class="single-icon-wrap">
+            <ha-state-icon
+              class="single-icon ${isOn ? 'active' : ''}"
+              data-interactive=${this.config.gestures?.member_icon ? 'true' : null}
+              style=${singleIconCombinedStyle}
+              .hass=${this.hass}
+              .stateObj=${stateObj}
+              .icon=${iconName}
+            ></ha-state-icon>
+            <!-- Stefan-2026-05-11 P15.6-r63e (R301 / PA-0032): mount the
+                 picker overlay here so long-press on the .single-icon has
+                 a DOM container to render its 4-option ring into.
+                 Pre-r63e: r62 R289 wired bindIcon(.single-icon) so the
+                 gesture detector DID fire, but renderPicker() was only
+                 rendered in the parallel-mode path — long-press silently
+                 opened a picker that had nowhere to show. Same picker
+                 instance as the parallel-mode mount, just positioned
+                 around the single-icon when this render path is active. -->
+            <div class="single-picker">${this._picker.renderPicker()}</div>
           </div>
+          <span class="name">${label}</span>
+          <!-- Stefan-2026-05-12 R324 (PA-0005): drop on/off from state-line.
+               Keep mode-suffix when mode is not default brightness, since
+               that conveys real info (which slider axis is active). -->
+          ${mode === 'temperature' || mode === 'volume'
+            ? html`<span class="state">${mode === 'temperature' ? 'temp' : 'vol'}</span>`
+            : ''}
         </div>
-      </ha-card>
+      </div>
     `;
+    // Stefan-2026-05-13 PA-0020 (R354): drop the outer ha-card chrome when
+    // embedded as a nested-member leaf. Mirrors R208 (group path) + R328
+    // (parallel path) + R351 (.parallel-mindmap-layout padding) — same fix-
+    // pattern for the single-light render branch which was missed by those
+    // earlier passes. Pre-R354 a nested object-form member (e.g. config1.txt
+    // light.bathroom's `kleiderschrank`/`decke_schlafzimmer`/`bett` leaves)
+    // hit this single-light path AND wrapped the slider in <ha-card>, giving
+    // each leaf its own background (rgba 255,255,255,0.4) + box-shadow +
+    // 30 px border-radius — visually a separate card sitting inside the
+    // outer card. The .container's 24 px padding also pushed the slider top
+    // 24 px below sibling bare-string-flat-tile sliders, breaking the
+    // top-alignment Stefan flagged ("nicht ganz top aligned"). The matching
+    // `:host([embedded]) .container { padding: 0 }` rule below restores the
+    // top-of-col alignment.
+    if (this.embedded === true) return singleLightContent;
+    return html`<ha-card>${singleLightContent}</ha-card>`;
   }
 
   static styles: CSSResult = css`
@@ -1530,6 +1719,28 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
        R111-safe: no backticks in CSS comments. */
     :host([embedded]) .parallel-mindmap-layout,
     :host([embedded]) .parallel-compact-layout {
+      padding: 0;
+    }
+    /* Stefan-2026-05-13 PA-0020 (R354): embedded single-light render branches
+       (.container vertical, .hpill-row horizontal, .speaker-row v2). Same
+       fix-pattern as R351 above. Pre-R354 the single-light path also wrapped
+       its content in <ha-card> + .container had 24 px padding designed for
+       a standalone single-light surface. When an object-form nested-member
+       (Stefan-config1.txt: light.bathroom -> [kleiderschrank, decke_schlafzimmer,
+       bett]) goes through the single-light branch as an embedded leaf, those
+       container-paddings push the slider DOWN by 24 px (or 16 px for hpill /
+       speaker) relative to sibling bare-string-flat-tile sliders that have
+       no padding. The ha-card chrome (background, box-shadow, border-radius)
+       on each embedded leaf also produced a visible "own card inside the
+       outer card" artifact — Stefan-Quote PA-0020: "auf einer eigenen Karte
+       angezeigt worden ist und dass die slider danach nicht ganz top aligned
+       waren". The render-side fix (drop the <ha-card> wrapper for embedded
+       in the 3 single-light branches) handles the chrome; this CSS rule
+       drops the inner-row padding so slider-top lines up with siblings.
+       R111-safe: no backticks in CSS comments. */
+    :host([embedded]) .container,
+    :host([embedded]) .hpill-row,
+    :host([embedded]) .speaker-row {
       padding: 0;
     }
     ha-card {
@@ -1600,13 +1811,23 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
        Drops the .parallel-mindmap-area SVG + orbiting icon. Used for nested
        embedded members where the surrounding card's mindmap arms already
        provide topology. Layout: small icon on top, slider-row below, no
-       curve-bg, minimal padding. */
+       curve-bg, minimal padding.
+       Stefan-2026-05-13 R362 (PA-0022): padding 8 -> 24 to match the
+       single-light reference (.container.vertical { padding: 24 }).
+       Stefan-Quote PA-0022: "Boxes' default view is too high. the gap to
+       the top of the card is too small". Pre-r362 the 8 px pad-top let
+       the slider butt against the card top with barely any breathing
+       room. New 24 px matches every other standalone surface (.layout,
+       .layout.compact, .parallel-mindmap-layout, .container.vertical).
+       Math impact: PARALLEL_EXPAND_IN_PLACE_DIFF recomputes from 60 to 28
+       (handled in everyday-light-card.ts where the const is defined).
+       R111-safe: no backticks. */
     .parallel-compact-layout {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 8px;
-      padding: 8px;
+      padding: 24px;
       position: relative;
     }
     /* Stefan-2026-05-12 R344 (PA-0017): apply the mindmap-node chrome
@@ -1630,7 +1851,17 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       justify-content: center;
       color: var(--paper-item-icon-color, #c1c1c1);
       background: var(--mindmap-dot-fill, #3a3a52);
-      border: 2.6px solid var(--mindmap-group-stroke, #f4b91d);
+      /* Stefan-2026-05-13 PA-0020 (R353): ring colour now state-reactive via
+         --icon-border-color custom property set inline by the host card from
+         computeIconBorderColor(isOn, rgb). Pre-R353 the border was always gold
+         (--mindmap-group-stroke) regardless of state, while the matching
+         expanded .parallel-mindmap-icon ring (SVG groupDot) had ALWAYS been
+         state-reactive (mindmap-path.ts groupStroke logic). Stefan-Quote
+         PA-0020: "der dot um das icon gold/gelb ist (anstatt in state farbe)"
+         — only the compact-layout suffered. CSS fallback chain keeps gold as
+         the literal default for callers (test pages, missing host style)
+         that don't supply --icon-border-color. R111-safe: no backticks. */
+      border: 2.6px solid var(--icon-border-color, var(--mindmap-group-stroke, #f4b91d));
       box-sizing: border-box;
       pointer-events: auto;
       /* R326: bound element + must declare touch-action statically. */
@@ -1729,8 +1960,15 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
          but bottom-anchored positioning is sensitive to sub-pixel rounding
          in some HA themes when --mdc-icon-size is overridden — caused the
          icon to drift 1-3 px in real renders. top+translate(-50%,-50%)
-         pins the visual center deterministically. */
-      top: 60px;
+         pins the visual center deterministically.
+         Stefan-2026-05-13 R359 (PA-0021): icon-Y now controlled by the
+         --parallel-mindmap-group-y custom property set inline on the
+         parent .parallel-mindmap-area. Default 60 preserves legacy
+         behaviour; expand_in_place + compact-was-true + currently-expanded
+         flips to 75 so the icon visually anchors at the same Y as the
+         compact-collapsed icon position (compact icon-Y = sliderH + 39).
+         R111-safe: no backticks. */
+      top: var(--parallel-mindmap-group-y, 60px);
       left: 50%;
       transform: translate(-50%, -50%);
       --mdc-icon-size: 26px;
@@ -1747,20 +1985,21 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
     .parallel-mindmap-icon.active {
       color: var(--paper-item-icon-active-color, var(--state-light-active-color, #f88d2a));
     }
-    .parallel-mindmap-layout > .caption {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
-      margin-top: 6px;
-      font-family: var(--paper-font-body1_-_font-family);
-      color: var(--primary-text-color);
-    }
-    .parallel-mindmap-layout > .caption .name { font-weight: 500; }
-    .parallel-mindmap-layout > .caption .state {
-      font-size: 12px;
-      color: var(--secondary-text-color);
-    }
+    /* Stefan-2026-05-13 R362 (PA-0022): caption rule made identical to the
+       default .caption (no margin-top:6px). Stefan-Quote PA-0022: "for
+       boxes the label is weird. it should stay in the same place. when
+       expanding it moves up. it should also be the same style and font
+       size etc as this cards label [single-light hall_spots]". Pre-r362
+       the parallel-mindmap-layout's caption had a 6 px top-margin that
+       pushed the label DOWN by 6 px in expanded view (vs compact-layout
+       caption which had no such margin) — combined with the R359 DIFF=60
+       slider-shrink, the net label-Y diff between modes was 10 px which
+       Stefan saw as "moves up [in expanded]". Removing the margin AND
+       recomputing the slider DIFF lets the label sit at the same Y in
+       both modes — the new derivation in everyday-light-card.ts yields
+       DIFF = 28 (was 60). The shared .caption rule below already
+       provides display/flex-direction/gap/font-family — no need to
+       repeat. R111-safe: no backticks. */
     .parallel-inline-title {
       font-family: var(--paper-font-body1_-_font-family);
       color: var(--primary-text-color);
@@ -1806,7 +2045,27 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       color: var(--primary-text-color);
     }
     .caption .name {
-      font-weight: 500;
+      /* Stefan-2026-05-13 R365 (PA-0023): font-weight 500 → 400 to match the
+         .tile.group .lbl reference label across card variants. Stefan-Quote
+         PA-0023: "bei R3 ist das Label immer noch etwas dickerer Text als
+         für die anderen Elemente". Pre-r365 the .caption .name had weight
+         500 (medium) which read as bolder than the .tile.group .lbl
+         (weight 400, used on every group-icon-bottom label across compact-
+         collapsed groups, expanded-view member tiles, AND the group-row
+         parent label). Stefan-Quote earlier (PA-0022): "it should also be
+         the same style and font size etc as this cards label [entity:
+         light.hall_spots]" — that hall_spots reference renders the
+         .tile.group .lbl path which is weight 400. Dropping to 400 here
+         unifies the visual rhythm across all card surfaces (single-light,
+         parallel-compact, parallel-mindmap-expanded).
+         Stefan-2026-05-13 R367 (PA-0024): font-size 14 → 12 px. Stefan-
+         Quote PA-0024: "R3 normal weight (400) statt fetter — ja, aber
+         die schrift ist aber auch immer noch größer als bei den anderen".
+         Reference .tile.group .lbl is 12 px; caption .name inherited 14 px
+         from card body. Now both dimensions (weight + size) match the
+         reference. R111-safe: no backticks. */
+      font-weight: 400;
+      font-size: 12px;
     }
     .caption .state {
       font-size: 12px;
@@ -1828,7 +2087,12 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       justify-content: center;
       color: var(--paper-item-icon-color, #c1c1c1);
       background: var(--mindmap-dot-fill, #3a3a52);
-      border: 2.6px solid var(--mindmap-group-stroke, #f4b91d);
+      /* Stefan-2026-05-13 PA-0021 (R357): state-reactive ring via
+         --icon-border-color, matching R353 (.parallel-compact-icon). Set
+         inline by the single-light render branch through
+         computeIconBorderColor(isOn, rgb). Gold default kept as fallback
+         when callers don't supply the var. R111-safe: no backticks. */
+      border: 2.6px solid var(--icon-border-color, var(--mindmap-group-stroke, #f4b91d));
       margin-bottom: 4px;
       box-sizing: border-box;
     }
@@ -1924,7 +2188,10 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
        some HA themes — the picker halo appeared a few px above the icon. */
     .parallel-mindmap-area .parallel-picker {
       position: absolute;
-      top: 60px;
+      /* Stefan-2026-05-13 R359 (PA-0021): track --parallel-mindmap-group-y
+         set inline on the parent area so the picker halo follows the
+         icon-Y when expand_in_place flips it from 60 to 75. */
+      top: var(--parallel-mindmap-group-y, 60px);
       left: 50%;
       transform: translate(-50%, -50%);
       z-index: 41;
@@ -1970,14 +2237,25 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
 
     /* Stefan-2026-05-09 P12 R95: mobile responsive. Demo broken on iPhone-
        width screens. Quick wins: shrink padding, allow slider-row to wrap
-       (so 4-axis parallel doesn't overflow), reduce slider gap. */
+       (so 4-axis parallel doesn't overflow), reduce slider gap.
+       Stefan-2026-05-13 R366 (PA-0023): flex-wrap:wrap REMOVED. Stefan-Quote
+       PA-0023: "der Temp slider wenn der Platz 'zu eng' wird unter den
+       brightness slider sich verschiebt". The R95 mobile-quick-win pre-
+       dated the R349 sibling-coordination (PA-0019) which shrinks sliders
+       to fit (44 px floor in nested narrow contexts) AND the R355/R364
+       arm-tracking math which keeps mindmap arms locked to actual slider
+       centers under any width. With both of those in place the row no
+       longer needs to wrap — sliders stay on one row, just shrink. Wrap
+       broke the visual cohesion (temp slider relocated below brightness)
+       and the mindmap arms (locked to the row's flex centers) got
+       detached from the wrapped sliders. Drop the rule, keep the gap:12
+       narrow-screen tweak. R111-safe. */
     @media (max-width: 480px) {
       .parallel-mindmap-layout {
         padding: 10px 8px 12px;
       }
       .parallel-slider-row {
         gap: 12px;
-        flex-wrap: wrap;
       }
       .parallel-mindmap-area {
         height: 70px;

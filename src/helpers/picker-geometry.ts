@@ -72,6 +72,18 @@ export interface PickerLayoutOpts {
    * otherwise falls through to pentagon distribution.
    */
   hasCollapse?: boolean;
+  /**
+   * Stefan-2026-05-13 PA-0021 (R358): drop the 'mindmap' slot from the
+   * `parallel-inline` variant. Set true when the picker is rendered for a
+   * single-light context (no parallel-render branch active, no group to
+   * expand) — Stefan-Quote PA-0021: "in this configs mode picker the
+   * Mindmap icon is present but of course it has no effect. When the mode
+   * picker would have no effect it should not be displayed!". The host
+   * (everyday-light-card.ts) shares ONE PickerController across the
+   * parallel-render branch AND the single-light fallback paths; this flag
+   * lets the per-render call sites distinguish the two.
+   */
+  noParallelMindmap?: boolean;
 }
 
 /**
@@ -102,7 +114,14 @@ export function getPickerSlots(
     // collapse the multi-axis view to a single slider on demand.
     // Stefan-2026-05-12 R330 (PA-0008) follow-on: mindmap is always at
     // the TOP of any picker that has it, so it occupies index 0.
-    const slots: PickerMode[] = ['mindmap', 'saved', 'wheel'];
+    // Stefan-2026-05-13 PA-0021 (R358): drop mindmap when the host signals
+    // `noParallelMindmap` — single-light renders use the same controller
+    // but have no parallel-toggle target, so the icon would be a visual
+    // no-op (Stefan-Quote: "when the mode picker would have no effect it
+    // should not be displayed").
+    const slots: PickerMode[] = opts.noParallelMindmap
+      ? ['saved', 'wheel']
+      : ['mindmap', 'saved', 'wheel'];
     if (opts.hasEffects) slots.push('effects');
     return slots;
   }
