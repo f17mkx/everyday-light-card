@@ -20,9 +20,9 @@ Home Assistant's stock light card and Mushroom give you one slider per light. Wo
 - **All-axis tile**: `default_view_mode: parallel` renders brightness + temperature + hue + saturation as 4 sliders side-by-side. Walk in, eyeball the room, drag any axis. No mode-switching.
 - **Press-drag-select mode picker**: long-press the icon, drag onto one of the 4-diamond picker options, release. Single gesture from idle to specific control. Color wheel blooms from the option you released on.
 - **Double-tap to cycle**: double-tap the icon to cycle through the slider modes.
-- **Color wheel**: stepped (8 saturation rings × 24 hues default) or smooth gradient. Configurable down to 5 rings if you want a chunky look (inner ring stays selectable instead of being a white-only blob). Click any sector, light snaps to that hue+sat.
+- **Color wheel**: stepped (6 saturation rings × 21 hues default) or smooth gradient. Configurable down to 5 rings if you want a chunky look (inner ring stays selectable instead of being a white-only blob). Click any sector, light snaps to that hue+sat.
 - **Saved-colors palette**: 8-cell grid you build by long-press → save current. Persists in HA's native user-data store (zero-config) or your own `input_text` helper.
-- **Dedicated picker tiles**: `default_view_mode: color-wheel` or `default_view_mode: saved-colors` turns the entire card into a standalone color picker — no slider, no icon, just the wheel or the palette. See [`docs/howto/05-gradient-mood.md`](docs/howto/05-gradient-mood.md).
+- **Dedicated picker tiles**: `default_view_mode: color-wheel` or `default_view_mode: saved-colors` turns the entire card into a standalone color picker: no slider, no icon, just the wheel or the palette. See [`docs/howto/05-gradient-mood.md`](docs/howto/05-gradient-mood.md).
 - **Compact-then-expand**: single tile with mindmap-arm hint. Long-press to expand inline (sibling cards reflow) or as a popup.
 - **Runtime gesture rebinding**: map any tap / long-press / press-drag to any mode via config (`gestures.member_icon`, `gestures.group_icon`).
 - **Theme-friendly**: consumes HA token vars (`--paper-item-icon-active-color`, `--state-light-active-color`, `--card-background-color`). Custom theme overrides via `--everyday-*` CSS variables.
@@ -33,9 +33,9 @@ Home Assistant's stock light card and Mushroom give you one slider per light. Wo
 
 ### Color wheel variants
 
-![Four color-wheel variants on white background: 8 rings × 24 hues (default), 12 rings × 24 hues (more saturation steps), 5 rings × 24 hues (chunky, no white center), and smooth gradient (continuous conic).](assets/screenshots/wheel-variants-grid.png)
+![Four color-wheel variants on white background: 8 rings × 24 hues, 12 rings × 24 hues (more saturation steps), 5 rings × 24 hues (chunky, no white center), and smooth gradient (continuous conic).](assets/screenshots/wheel-variants-grid.png)
 
-Configure via `color_wheel: { type: stepped, hue_segments: N, saturation_rings: M }` or `color_wheel: { type: smooth }`. When `saturation_rings: 5` or fewer, the white-center disc is automatically suppressed so the innermost ring remains a selectable low-saturation color.
+Default is `6 rings × 21 hues` (stepped). Configure via `color_wheel: { type: stepped, hue_segments: N, saturation_rings: M }` or `color_wheel: { type: smooth }`. When `saturation_rings: 5` or fewer, the white-center disc is automatically suppressed so the innermost ring remains a selectable low-saturation color.
 
 ### Dedicated color picker tiles
 
@@ -53,12 +53,15 @@ Set `default_view_mode: color-wheel` or `default_view_mode: saved-colors` to mak
 
 ## Install (via HACS)
 
-The card is in HACS-Default.
+> Status: pending HACS-Default review (queue: several months, [PR tracker](https://github.com/hacs/default/pulls)). Until then, add as **custom repository**.
 
-1. Open HACS → Frontend → Custom repositories (⋮ menu) → add `https://github.com/f17mkx/everyday-light-card` as type `Lovelace`. Skip this if the card is already listed.
+1. HACS → ⋮ menu → Custom repositories → URL `https://github.com/f17mkx/everyday-light-card`, type `Lovelace`.
 2. Search "Everyday Light Card" → install.
-3. Hard-refresh (Cmd/Ctrl+Shift+R).
-4. Add the card to a dashboard.
+3. Add to your Lovelace resources (HACS does this for you on most setups).
+4. Hard-refresh (Cmd/Ctrl+Shift+R).
+5. Add the card to a dashboard.
+
+Once we're in HACS-Default, step 1 disappears.
 
 ## Install (manual)
 
@@ -122,9 +125,22 @@ manual_members:
 
 More recipes in [`docs/howto/`](docs/howto/).
 
+## Configuration
+
+Full schema reference: [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md). Covers every option (group, slider, parallel-sliders, color-wheel, saved-colors, effects-picker, gestures, classic-mode) with defaults, types, and copy-paste examples.
+
+Marquee options:
+
+- `default_view_mode: parallel | color-wheel | saved-colors | effects-picker` - render the card as a dedicated tile for one purpose.
+- `group.expand_in_place: true` - card height stays constant on compact ↔ expanded transitions.
+- `group.expansion_sticky: true` - expanded state persists across page reloads.
+- `parent_node: hide` + `show_icons: false` + `show_mindmap: false` - render only a row of sliders.
+- `icon_color: 'on-state'` - single-light icons reflect entity RGB instead of theme gold.
+
 ## Documentation
 
 - [`docs/INSTALLATION.md`](docs/INSTALLATION.md): HACS + manual install.
+- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md): full config schema reference (all options + examples).
 - [`docs/wiki/`](docs/wiki/): per-feature reference (quick-start, config schema, gestures, group-layout, color-wheel, saved-colors).
 - [`docs/howto/`](docs/howto/): apartment-scenario recipes.
 - [`docs/adr/`](docs/adr/): architecture decisions (popup-portal pattern, gesture detector, mindmap SVG).

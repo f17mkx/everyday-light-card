@@ -49,7 +49,7 @@ const DEFAULT_PARALLEL_SAVED_COLORS: ColorTuple[] = [
   [200, 100, 220],  // purple
 ];
 
-const VERSION = '1.0.7';
+const VERSION = '1.0.8';
 
 console.info(
   `%c EVERYDAY-LIGHT-CARD %c v${VERSION} `,
@@ -934,13 +934,14 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
     }
 
     // Stefan-2026-05-12 P15.6-r64 (PA-0014 R3): color-wheel render-mode.
-    // The card becomes a standalone color-wheel tile — no slider, no icon,
+    // The card becomes a standalone color-wheel tile - no slider, no icon,
     // no mindmap. Wheel geometry from `color_wheel.*` config (defaults
-    // 8 rings × 24 hues stepped). Tap → light.turn_on with rgb_color.
+    // 6 rings x 21 hues stepped, matching the popup-wheel defaults).
+    // Tap -> light.turn_on with rgb_color.
     if (this.config.default_view_mode === 'color-wheel' && domain === 'light') {
       const wheelType = this.config.color_wheel?.type === 'smooth' ? 'smooth' : 'stepped';
-      const hues = this.config.color_wheel?.hue_segments ?? 24;
-      const rings = this.config.color_wheel?.saturation_rings ?? 8;
+      const hues = this.config.color_wheel?.hue_segments ?? 21;
+      const rings = this.config.color_wheel?.saturation_rings ?? 6;
       const labelTitle = this.config.name
         ?? (stateObj.attributes.friendly_name as string | undefined)
         ?? this.config.entity;

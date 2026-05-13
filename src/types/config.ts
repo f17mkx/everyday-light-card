@@ -253,8 +253,8 @@ export interface ParallelSlidersConfig {
 
 export interface ColorWheelConfig {
   type?: 'stepped' | 'smooth' | 'both'; // Stefan-Decision (A6): both should be option
-  hue_segments?: number; // for stepped, default 12
-  saturation_rings?: number; // for stepped, default 4
+  hue_segments?: number; // for stepped, default 21
+  saturation_rings?: number; // for stepped, default 6
   // Keep popup open after picking a color (default true). When false, the
   // popup auto-closes after the first pick - 1-shot mode for users who
   // prefer minimal UI persistence.
@@ -319,7 +319,7 @@ export interface EverydayLightCardConfig extends LovelaceCardConfig {
    *                 the color wheel for the entity. No slider, no icon, no
    *                 mindmap. Wheel geometry from `color_wheel.hue_segments` /
    *                 `color_wheel.saturation_rings` / `color_wheel.type`;
-   *                 defaults 8 rings × 24 hues stepped. Tap a segment →
+   *                 defaults 6 rings x 21 hues stepped. Tap a segment to
    *                 `light.turn_on` with `rgb_color`. Useful as a dedicated
    *                 wall-tile picker.
    *   'saved-colors' — Stefan-2026-05-12 P15.6-r64 (PA-0014 R3): render JUST

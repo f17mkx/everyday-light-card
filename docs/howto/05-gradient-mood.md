@@ -29,7 +29,7 @@ That's it. The card renders as a tile-with-wheel. Tap any segment → `light.tur
 
 ### Wheel density
 
-Defaults are 8 saturation rings x 24 hues (the new v1.0.1 default). Override:
+Defaults are 6 saturation rings x 21 hues. Override:
 
 ```yaml
 type: custom:everyday-light-card
@@ -43,12 +43,12 @@ color_wheel:
 
 Rule of thumb:
 
-- `saturation_rings: 8` (default) — generous saturation grading, white-center disc for easy white pick.
-- `saturation_rings: 12` — wall-poster look, lots of pastels between full saturation and white.
-- `saturation_rings: 5` (or fewer) — chunky picker for thumb use on a phone. **The white-center disc is suppressed automatically** so the innermost arc remains a selectable low-saturation color rather than being eaten by a tap-to-white blob.
-- `type: smooth` — continuous HSV gradient, click maps to polar coords. No discrete grid.
+- `saturation_rings: 6` (default): balanced saturation grading, white-center disc for easy white pick.
+- `saturation_rings: 8` or `12`: wall-poster look, lots of pastels between full saturation and white.
+- `saturation_rings: 5` (or fewer): chunky picker for thumb use on a phone. **The white-center disc is suppressed automatically** so the innermost arc remains a selectable low-saturation color rather than being eaten by a tap-to-white blob.
+- `type: smooth`: continuous HSV gradient, click maps to polar coords. No discrete grid.
 
-![8 rings x 24 hues (default), 12 rings, 5 rings (no white center), and smooth](../../assets/screenshots/wheel-variants-grid.png)
+![8 rings x 24 hues, 12 rings, 5 rings (no white center), and smooth](../../assets/screenshots/wheel-variants-grid.png)
 
 ## Config — saved-colors mode
 

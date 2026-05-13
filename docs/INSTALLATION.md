@@ -4,17 +4,17 @@
 
 ## Via HACS
 
-Once the card is listed in HACS-Default (planned P20):
+> Status: pending HACS-Default review ([PR tracker](https://github.com/hacs/default/pulls)). Until then, add as a **custom repository**.
 
-1. Open HACS → Frontend → ⋮ menu → Custom repositories.
+1. Open HACS → ⋮ menu → Custom repositories.
 2. Add `https://github.com/f17mkx/everyday-light-card` as type `Lovelace`.
 3. Search "Everyday Light Card" → install.
 4. Refresh your browser (Ctrl/Cmd+R).
-5. Edit a dashboard → "+" → Search "Everyday Slider" → done.
+5. Edit a dashboard → "+" → Search "Everyday Light Card" → done.
 
-HACS handles the resource registration automatically.
+HACS handles the resource registration automatically. Once the card is in HACS-Default, step 1 disappears (it'll show up in the default Frontend list).
 
-## Manual install (current path while HACS-listing is pending)
+## Manual install
 
 1. Download `everyday-light-card.js` from the [Releases page](https://github.com/f17mkx/everyday-light-card/releases) (latest tag).
 2. Copy to `<config>/www/everyday-light-card.js`.
@@ -35,7 +35,7 @@ Open the dashboard and confirm:
 - Card renders without a red error border.
 - The entity name appears in the caption.
 - Dragging the slider changes brightness.
-- Long-press the icon — mode-picker appears with 4 diamond options.
+- Long-press the icon: mode-picker appears with 4 diamond options.
 
 If the card shows "Custom element not found", the resource isn't registered. Re-check step 3.
 
@@ -43,10 +43,10 @@ If the card shows "Custom element not found", the resource isn't registered. Re-
 
 **HACS:** HACS prompts when a new release is tagged. Click Update.
 
-**Manual:** Replace `/config/www/everyday-light-card.js` with the new file. Append `?v=<version>` to the resource URL each time you update — HA caches custom-card JS aggressively, this forces a reload:
+**Manual:** Replace `/config/www/everyday-light-card.js` with the new file. Append `?v=<version>` to the resource URL each time you update. HA caches custom-card JS aggressively, so this forces a reload:
 
 ```yaml
-url: /local/everyday-light-card.js?v=0.9.0
+url: /local/everyday-light-card.js?v=1.0.0
 ```
 
 ## Uninstall
@@ -55,7 +55,7 @@ url: /local/everyday-light-card.js?v=0.9.0
 
 **Manual:** Delete `/config/www/everyday-light-card.js` and remove the resource from Settings → Dashboards → Resources.
 
-In both cases also remove every `type: custom:everyday-light-card` block from your dashboard YAML before deleting the resource — otherwise the dashboards will show "Custom element not found" until you do.
+In both cases also remove every `type: custom:everyday-light-card` block from your dashboard YAML before deleting the resource. Otherwise the dashboards will show "Custom element not found" until you do.
 
 ## Compatibility
 

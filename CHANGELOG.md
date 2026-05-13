@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## 2026-05-13 - v1.0.8 / PA-0025: canonical color-wheel default 21x6 + docs polish (CONFIGURATION.md schema reference, HACS-pending wording, INSTALLATION.md v=1.0.0 fix)
+
+- 🐛 fix(v1.0.8) **canonical color-wheel default 21 hues x 6 rings (PA-0025)**: Stefan-Quote PA-0025: "21 hues × 6 rings should be the default - fix that (and everything related, then publish onto public repo)". Source had two conflicting defaults: popup-wheel + picker-controller used 21x6 (`everyday-light-card.ts:877-878`, `:1340-1341`, `picker-controller.ts:708-709`), but the standalone `default_view_mode: color-wheel` tile (`everyday-light-card.ts:942-943`) and the `<color-wheel>` component itself (`color-wheel.ts:84-85`) used 24x8. README + docs/howto/05-gradient-mood.md documented 24x8 as default; CONFIGURATION.md had to split-document both. Resolved by standardizing on 21x6: standalone tile + Lit component now default to 21x6 to match the popup-wheel + picker-controller paths. Visual regression for users who liked the denser 24x8 standalone-tile look; they can opt back in via `color_wheel: { hue_segments: 24, saturation_rings: 8 }`. Stale JSDoc comments in `src/types/config.ts` (`default 12`, `default 4`) also corrected.
+
+- 📚 docs(v1.0.8) **new docs/CONFIGURATION.md schema reference (PA-0023)**: full config-schema reference covering all 41 user-facing options across top-level + group + slider + parallel_sliders + saved_colors + color_wheel + effects_picker + cycle + gestures + classic_mode, plus 6 copy-paste example blocks (parallel-axis, sticky-expand-in-place, standalone color-wheel, row-of-sliders-only, media-player mixer, nested apartment topology). README gains a "Configuration" section linking to it.
+
+- 📚 docs(v1.0.8) **README + INSTALLATION.md HACS-pending wording (PA-0023)**: "is in HACS-Default" was misleading (still pending review, queue several months). Reframed both surfaces as "pending HACS-Default review, add as custom repository until then". Once we're in HACS-Default, step 1 disappears.
+
+- 📚 docs(v1.0.8) **INSTALLATION.md `v=0.9.0` typo fix (PA-0025)**: Stefan-Quote: "should be v=1.0.0 (koennte verwirrend sein wenn da eine versionsnummer steht, die es nicht gibt)". 0.9.0 was never a released version; bumped to 1.0.0 so the example matches reality.
+
+- 📚 docs(v1.0.8) **GitHub release rewrites (PA-0023, PA-0025)**: v1.0.0, v1.0.2, v1.0.7 release bodies rewritten to drop internal PA-NNNN / R-NNN references, `superpro-light-card-dev` source-repo mentions, and Chrome-MCP-pixel-math jargon. User-facing tone. v1.0.0 title "Initial HACS release" -> "Initial public release" (misleading; still pending HACS-Default).
+
+- 📚 docs(v1.0.8) **em-dash cleanup in public-facing docs (PA-0023)**: 4 pre-existing em-dashes in README + INSTALLATION.md replaced with `:` / period per Stefan-voice rule (em-dashes are AI-tells).
+
+- 📚 docs(v1.0.8) **VERSION bump 1.0.7 -> 1.0.8**: package.json + VERSION constant.
+
+Build: clean. Tests: 156/156. v1.0.7 -> v1.0.8: backwards compatible. Color-wheel default visual regression (24x8 -> 21x6) recoverable via explicit config override.
+
 ## 2026-05-13 - v1.0.7 / P15.6-r74 (PA-0024): R367 .caption .name font-size 14→12 px (full label-style match with .tile.group .lbl reference — weight + size both now align)
 
 - 🎨 fix(P15.6-r74 / v1.0.7) **R367 .caption .name font-size 14 → 12 px (PA-0024)**: Stefan-Quote PA-0024 (follow-up to R365): "R3 normal weight (400) statt fetter — ja, aber die schrift ist aber auch immer noch größer als bei den anderen". R365 unified font-weight (500→400) but font-size stayed at the card-body-inherited 14 px while the reference label (`.tile.group .lbl` on Stefan's `entity: light.hall_spots` test card) is 12 px. r74 adds `font-size: 12px` to `.caption .name`. Both dimensions (weight + size) now match the reference. Affects all card variants using `.caption .name`: single-light vertical container, single-light horizontal hpill, parallel-compact-layout, parallel-mindmap-layout-expanded.

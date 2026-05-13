@@ -73,16 +73,10 @@ export class EverydayColorWheel extends LitElement {
    *             maps to polar coords → HSV → RGB.
    */
   @property({ type: String, attribute: 'wheel-type' }) wheelType: 'stepped' | 'smooth' = 'stepped';
-  // Stefan-2026-05-12 P15.6-r64 (PA-0014): defaults bumped from 21×6 to
-  // 8×24 — more hue resolution at the same visual density, fewer
-  // saturation rings so each ring carries more weight. Stefan-Quote
-  // PA-0014: "default, with 8 steps and 24 hues, 12 und 5 steps". The
-  // 21×6 default from r47 was too crowded on small screens; the new
-  // 8×24 reads cleaner while exposing more colors. Hosts default to
-  // 8×24 in their `??` fallbacks so explicit-undefined props land on
-  // the same numbers.
-  @property({ type: Number, attribute: 'hues' }) hues = 24;
-  @property({ type: Number, attribute: 'rings' }) rings = 8;
+  // Defaults: 21 hues x 6 rings, matching the host card's `??` fallbacks.
+  // Override via `hue_segments` / `saturation_rings` in config.
+  @property({ type: Number, attribute: 'hues' }) hues = 21;
+  @property({ type: Number, attribute: 'rings' }) rings = 6;
   // Stefan-2026-05-12 P15.6-r64 (PA-0014): when `rings ≤ 5`, the inner
   // circle must NOT be replaced by a white disc — instead, the natural
   // low-saturation segment at ring 0 remains selectable. Stefan-Quote:
