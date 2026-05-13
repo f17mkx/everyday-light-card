@@ -8,6 +8,8 @@
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/f17mkx?style=flat-square&logo=github&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/f17mkx)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me-a%20Coffee-FFDD00?style=flat-square&logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/f17mkx)
 
+![Apartment topology hero: 11 individual lights as vertical pill sliders across the top row (ceiling, counter, mirror, wall, spots, hall), with 5 group icons below (Ceiling, Kitchen, Bathroom, Hall, Back) connected via mindmap arms to a Back root node. The leftmost ceiling pill shows the active color-wheel state (149°), the mirror pill shows the cool-temperature state, the rest show warm-temperature brightness fills.](assets/screenshots/00-hero-apartment-topology.png)
+
 ![Collapsed group tile expanded inline on long-press, color mode changed through a popup on a member light, slider mode cycled via double-tap.](assets/demos/03-collapsed-expand-color-and-slider-cycle.gif)
 
 ## Why this exists
@@ -42,10 +44,6 @@ Default is `6 rings × 21 hues` (stepped). Configure via `color_wheel: { type: s
 ![Three side-by-side display modes: standalone color wheel tile, standalone saved-colors tile, and the default slider+icon mode for comparison.](assets/screenshots/display-modes-overview.png)
 
 Set `default_view_mode: color-wheel` or `default_view_mode: saved-colors` to make the entire card a picker. No slider, no icon. Tap a color, light goes to that color. Recipe: [`docs/howto/05-gradient-mood.md`](docs/howto/05-gradient-mood.md).
-
-### Apartment topology, expanded
-
-![Apartment topology view, expanded: 14 lights across 4 groups (Kitchen, Bathroom, Hall, Main), each light a vertical pill slider with a group icon beneath, mindmap arms connecting the groups to the apartment root node at the bottom.](assets/screenshots/00-hero-expanded.png)
 
 ### Parallel-axis sliders with color-mode switching and group-toggle persistence
 
