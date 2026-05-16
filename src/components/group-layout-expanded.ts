@@ -32,11 +32,13 @@ import './mode-picker.js';
 import './color-wheel.js';
 import './saved-colors-picker.js';
 import './effects-list-picker.js';
+import './scenes-list-picker.js';
 import type { MindmapMember } from './mindmap-path.js';
 import type { SliderMode } from './vertical-pill-slider.js';
 import type { ColorTuple, ColorEntry } from './saved-colors-picker.js';
 import type {
   SavedColorsConfig,
+  ScenesPickerConfig,
   ParallelSlidersConfig,
   EverydayLightCardConfig,
   ManualMember,
@@ -44,6 +46,7 @@ import type {
 } from '../types/config.js';
 
 import { groupToggleWithRestore } from '../helpers/group-toggle.js';
+import { discoverScenesForEntity } from '../helpers/scenes-discovery.js';
 import { POPUP_PORTAL_STYLES } from '../helpers/popup-portal-styles.js';
 import { computeIconStateColor } from '../helpers/icon-color.js';
 import { computeMemberColsGap, resolveOverflow, GAP_MAX_BY_DEPTH } from '../helpers/member-cols-gap.js';
@@ -407,6 +410,14 @@ export class EverydayGroupLayoutExpanded extends LitElement {
    */
   @property({ attribute: false }) savedColorsConfig?: SavedColorsConfig;
 
+  /**
+   * Stefan-2026-05-16 PA-0001 (scenes_list): forwarded `scenes_picker` config
+   * from the host card. Drives the auto-discovery override (`scenes` list),
+   * the prefix-strip toggle, and the `scene.turn_on` transition. When
+   * `undefined`, auto-discovery runs with defaults.
+   */
+  @property({ attribute: false }) scenesPickerConfig?: ScenesPickerConfig;
+
   /** Per-member previous on/off state, used to detect on→off transitions for the auto-revert logic. */
   private _lastStates: Record<string, string> = {};
 
@@ -464,6 +475,22 @@ export class EverydayGroupLayoutExpanded extends LitElement {
   // target entity changes (multi-card dashboard). When empty, the picker
   // treats `effect_list` as the initial active order.
   @state() private _effectsPopupActiveOrder: string[] = [];
+
+  // Stefan-2026-05-16 PA-0001 (scenes_list): scenes-list popup state. Same
+  // shape as `_effectsTarget` — set to the target entity_id when the user
+  // double-taps a group/member icon configured with `scenes_list`, and
+  // anchors at `_popupOrigin` in the body-portal. Reset to null when the
+  // popup closes (outside-click, scene-pick, or group-tap close gesture).
+  @state() private _scenesTarget: string | null = null;
+  // Stefan-2026-05-16 PA-0005: scenes edit-mode + active-order state for
+  // the popup. Mirror of `_effectsEditMode` / `_effectsPopupActiveOrder`.
+  // Long-press a scene row in default mode → enter-edit; long-press in
+  // edit mode → delete (move to grayed); tap a grayed row → restore.
+  // Active-order is per-popup-target (changing target wipes it) to avoid
+  // cross-card bleed. Cross-session persistence still lives on the
+  // host card via `scenes_picker.source` (parallel-inline path).
+  @state() private _scenesEditMode = false;
+  @state() private _scenesPopupActiveOrder: string[] = [];
 
   /**
    * Topology-popup state (Stefan-2026-05-09 P43 R21 — Q3 Decision B).
@@ -1110,6 +1137,7 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       changed.has('_wheelTarget') ||
       changed.has('_savedColorsTarget') ||
       changed.has('_effectsTarget') ||
+      changed.has('_scenesTarget') ||
       changed.has('_compactExpanded') ||
       changed.has('_topologyPopupOpen') ||
       changed.has('_parallelSlidersTarget')
@@ -1122,6 +1150,7 @@ export class EverydayGroupLayoutExpanded extends LitElement {
         this._wheelTarget !== null ||
         this._savedColorsTarget !== null ||
         this._effectsTarget !== null ||
+        this._scenesTarget !== null ||
         this._compactExpanded ||
         this._topologyPopupOpen ||
         this._parallelSlidersTarget !== null
@@ -1139,6 +1168,9 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       changed.has('_wheelTarget') ||
       changed.has('_savedColorsTarget') ||
       changed.has('_effectsTarget') ||
+      changed.has('_scenesTarget') ||
+      changed.has('_scenesEditMode') ||
+      changed.has('_scenesPopupActiveOrder') ||
       changed.has('_topologyPopupOpen') ||
       changed.has('_parallelSlidersTarget') ||
       changed.has('_parallelPopupOrigin') ||
@@ -1558,6 +1590,75 @@ export class EverydayGroupLayoutExpanded extends LitElement {
                   @restore-effect=${this._onEffectsRestore}
                   @exit-edit=${this._onEffectsExitEdit}
                 ></everyday-effects-list-picker>
+              </div>
+            `;
+          })()
+        : null}
+      ${this._scenesTarget && this._popupOrigin
+        ? (() => {
+            // Stefan-2026-05-16 PA-0001 (scenes_list): render the scenes-
+            // list-picker into the body-portal, anchored at the captured
+            // icon origin. discoverScenesForEntity intersects every
+            // `scene.*` with the target's leaves (or with the explicit
+            // `scenes_picker.scenes` override). Empty discovery silently
+            // no-ops the popup so misconfigured cards don't show a blank
+            // surface.
+            const scenes = discoverScenesForEntity(
+              this.hass,
+              this._scenesTarget,
+              {
+                override: this.scenesPickerConfig?.scenes,
+                stripPrefix: this.scenesPickerConfig?.name_strip_prefix !== false,
+              },
+            );
+            if (scenes.length === 0) {
+              this._scenesTarget = null;
+              return null;
+            }
+            // Stefan-2026-05-16 PA-0005: pre-compute the active-order
+            // for this popup-target. When the user has trimmed the
+            // active list via long-press-delete, fall back to the
+            // trimmed order; otherwise use every discovered scene id
+            // (default-populate). Mirrors the effects-list popup R217.
+            const fullSceneIds = scenes.map((s) => s.id);
+            const sceneActiveOrder = this._scenesPopupActiveOrder.length > 0
+              ? this._scenesPopupActiveOrder
+              : fullSceneIds;
+            return html`
+              <div
+                class="inplace-popup scenes"
+                style=${`left: ${x}px; top: ${y}px; max-width: 320px; max-height: 60vh;`}
+                @click=${(ev: Event) => ev.stopPropagation()}
+              >
+                <div
+                  style="display:flex; justify-content:space-between; align-items:center; margin: 0 0 8px; padding: 0 4px;"
+                >
+                  <span
+                    style="font-size: 13px; font-weight: 500; color: var(--primary-text-color, #fff); opacity: 0.9;"
+                    >Scenes${this._scenesEditMode ? ' · edit' : ''}</span
+                  >
+                  ${this._scenesEditMode
+                    ? html`<button
+                        type="button"
+                        style="border: none; background: transparent; color: var(--primary-color, #03a9f4); font-size: 12px; cursor: pointer; padding: 2px 6px;"
+                        @click=${this._onScenesExitEdit}
+                      >
+                        Done
+                      </button>`
+                    : null}
+                </div>
+                <everyday-scenes-list-picker
+                  .scenes=${scenes}
+                  .activeOrder=${sceneActiveOrder}
+                  .editMode=${this._scenesEditMode}
+                  .editable=${this.scenesPickerConfig?.editable !== false}
+                  .longPressMs=${this.longPressMs}
+                  @scene-pick=${this._onScenePick}
+                  @delete-scene=${this._onSceneDelete}
+                  @restore-scene=${this._onSceneRestore}
+                  @enter-edit=${this._onScenesEnterEdit}
+                  @exit-edit=${this._onScenesExitEdit}
+                ></everyday-scenes-list-picker>
               </div>
             `;
           })()
@@ -2440,7 +2541,7 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     // the explicit "back to expanded view" gesture - it closes the popup
     // and KEEPS the expansion open. Only when no popup is open does the
     // tap mean "toggle the group on/off".
-    if (this._wheelTarget || this._savedColorsTarget || this._effectsTarget) {
+    if (this._wheelTarget || this._savedColorsTarget || this._effectsTarget || this._scenesTarget) {
       this._wheelTarget = null;
       this._savedColorsTarget = null;
       this._savedColorsEditing = false;
@@ -2450,6 +2551,12 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       // the full effect_list visible.
       this._effectsEditMode = false;
       this._effectsPopupActiveOrder = [];
+      // Stefan-2026-05-16 PA-0001 (scenes_list): same close-on-group-tap
+      // behaviour for the scenes popup. PA-0005: also reset edit-mode +
+      // trimmed active-order so reopening starts clean.
+      this._scenesTarget = null;
+      this._scenesEditMode = false;
+      this._scenesPopupActiveOrder = [];
       return;
     }
     void groupToggleWithRestore(this.hass, this.groupEntityId, this.memberIds);
@@ -2613,6 +2720,16 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     }
     if (action === 'effects_list') {
       this._applyPickerMode(entityId, 'effects', iconOrigin, variant);
+      return;
+    }
+    if (action === 'scenes_list') {
+      // Stefan-2026-05-16 PA-0001 (scenes_list): open scenes popup at the
+      // tapped icon. Same anchor + portal path as the effects popup; we
+      // set `_scenesTarget` so the body-portal render-pass mounts the
+      // scenes-list-picker rooted at `_popupOrigin`.
+      this._scenesTarget = entityId;
+      if (iconOrigin) this._popupOrigin = iconOrigin;
+      this._popupOpenedAt = Date.now();
       return;
     }
     if (action === 'classic_more_info') {
@@ -2964,6 +3081,81 @@ export class EverydayGroupLayoutExpanded extends LitElement {
     this._savedColorsEditing = false;
   };
 
+  // Stefan-2026-05-16 PA-0001 (scenes_list): scene-pick from the popup.
+  // Fire `scene.turn_on { entity_id, transition }` and close the popup
+  // (scenes are typically one-shot — user picks, watches, doesn't keep
+  // the picker open like a colour wheel). Transition seconds come from
+  // `scenes_picker.transition` (default 0.4 s to match Hue-app feel).
+  // Stefan-2026-05-16 PA-0005: in edit-mode the popup STAYS OPEN after
+  // pick (mirrors effects-list R217 behaviour) so the user can continue
+  // curating the active list.
+  private _onScenePick = (ev: CustomEvent): void => {
+    ev.stopPropagation();
+    if (!this.hass) return;
+    const id = ev.detail?.id as string | undefined;
+    if (!id) return;
+    const transition = this.scenesPickerConfig?.transition ?? 0.4;
+    void this.hass.callService('scene', 'turn_on', {
+      entity_id: id,
+      transition,
+    });
+    if (!this._scenesEditMode) {
+      this._scenesTarget = null;
+    }
+  };
+
+  // Stefan-2026-05-16 PA-0005: scenes-list popup edit-mode handlers.
+  // Mirror the effects-list popup R217 flow. Long-press a row in default
+  // mode → enter-edit (visual indicator: " · edit" suffix + Done button).
+  // Long-press in edit-mode → delete that scene from the active list.
+  // Tap a grayed row → restore. Tap outside any row → exit-edit.
+  // Persistence is in-memory only at this level — popup is ephemeral;
+  // closing it (or switching target entity) resets the trimmed order.
+  // Cross-session persistence lives on the parallel-inline path's
+  // host card via `scenes_picker.source` (same as effects).
+  private _onScenesEnterEdit = (ev: Event): void => {
+    ev.stopPropagation();
+    this._scenesEditMode = true;
+  };
+
+  private _onScenesExitEdit = (ev: Event): void => {
+    ev.stopPropagation();
+    this._scenesEditMode = false;
+  };
+
+  private _onSceneDelete = (ev: CustomEvent): void => {
+    ev.stopPropagation();
+    const target = this._scenesTarget;
+    if (!target) return;
+    const id = ev.detail?.id as string | undefined;
+    if (!id) return;
+    const fullList = discoverScenesForEntity(this.hass, target, {
+      override: this.scenesPickerConfig?.scenes,
+      stripPrefix: this.scenesPickerConfig?.name_strip_prefix !== false,
+    }).map((s) => s.id);
+    const current = this._scenesPopupActiveOrder.length > 0
+      ? this._scenesPopupActiveOrder
+      : fullList;
+    this._scenesPopupActiveOrder = current.filter((s) => s !== id);
+  };
+
+  private _onSceneRestore = (ev: CustomEvent): void => {
+    ev.stopPropagation();
+    const target = this._scenesTarget;
+    if (!target) return;
+    const id = ev.detail?.id as string | undefined;
+    if (!id) return;
+    const fullList = discoverScenesForEntity(this.hass, target, {
+      override: this.scenesPickerConfig?.scenes,
+      stripPrefix: this.scenesPickerConfig?.name_strip_prefix !== false,
+    }).map((s) => s.id);
+    const current = this._scenesPopupActiveOrder.length > 0
+      ? this._scenesPopupActiveOrder
+      : fullList;
+    if (current.includes(id)) return;
+    this._scenesPopupActiveOrder = [...current, id];
+  };
+
   // Stefan-2026-05-10 P15.6-r43 (R209 + R214): effects-pick from the
   // mode-picker → effects popup. Fire `light.turn_on effect: <name>`,
   // close the popup, optionally cycle slider mode back to brightness.
@@ -3122,7 +3314,8 @@ export class EverydayGroupLayoutExpanded extends LitElement {
       const popupOpen =
         this._wheelTarget !== null
         || this._savedColorsTarget !== null
-        || this._effectsTarget !== null;
+        || this._effectsTarget !== null
+        || this._scenesTarget !== null;
       if (popupOpen) {
         if (!inPopup && !withinSuppression) {
           if (this._wheelTarget) this._wheelTarget = null;
@@ -3134,6 +3327,14 @@ export class EverydayGroupLayoutExpanded extends LitElement {
             this._effectsTarget = null;
             this._effectsEditMode = false;
             this._effectsPopupActiveOrder = [];
+          }
+          // Stefan-2026-05-16 PA-0001 (scenes_list): same outside-click
+          // close-path as the effects popup. PA-0005: reset edit-mode +
+          // active-order so reopening starts clean.
+          if (this._scenesTarget) {
+            this._scenesTarget = null;
+            this._scenesEditMode = false;
+            this._scenesPopupActiveOrder = [];
           }
         }
         // Whether we closed the popup or the click was inside it, we do NOT

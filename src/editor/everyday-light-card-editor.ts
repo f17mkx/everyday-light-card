@@ -302,6 +302,7 @@ export class EverydayLightCardEditor extends LitElement implements LovelaceCardE
                   { value: 'color_wheel', label: 'Open color wheel' },
                   { value: 'saved_colors', label: 'Open saved colors' },
                   { value: 'effects_list', label: 'Open effects list' },
+                  { value: 'scenes_list', label: 'Open scenes list' },
                   { value: 'expand_group', label: 'Expand group (mindmap)' },
                   { value: 'classic_more_info', label: 'HA more-info dialog' },
                   { value: 'toggle', label: 'Toggle entity' },

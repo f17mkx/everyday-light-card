@@ -149,6 +149,39 @@ For lights whose entity exposes an `effect_list`.
 
 ---
 
+## `scenes_picker`
+
+Drives the `scenes_list` gesture action. By default the card auto-discovers every `scene.*` entity whose `entity_id` attribute intersects the target light's leaves — most Hue / Zigbee bridges set this attribute automatically when scenes are favourited in the app. Set `scenes` to override with a curated list.
+
+| Option | Type | Default | Notes |
+|---|---|---|---|
+| `scenes` | list of `scene.*` ids | (auto-discover) | Explicit override. When set, replaces the auto-intersection entirely. Use when auto-discovery surfaces unwanted scenes (e.g. global "all lights" scenes that touch every bulb) or when you want a short curated list per card |
+| `source` | string | (in-memory) | `helper:input_text.<id>` for persistence of the curated active-order across reloads. JSON payload `{ activeOrder: [sceneId, ...] }`. Without a source, edits are in-memory only and lost on refresh |
+| `transition` | number (seconds) | `0.4` | Passed to `scene.turn_on`. `0` for instant snap, larger for a smoother fade |
+| `name_strip_prefix` | boolean | `true` | Strip the light's friendly_name from the start of each scene name. "Wohnzimmer Konzentriert" → "Konzentriert" when the card targets `light.wohnzimmer`. Set `false` to keep the full name |
+| `editable` | boolean | `true` | Long-press on an active scene-row enters edit mode (hide / restore). Set `false` to suppress the edit path for a strict pick-only surface (e.g. a guest tablet) |
+| `in_picker` | boolean | `false` | Reserved for future mode-picker slot. Not wired yet — wire the action via `gestures.member_icon.double_tap` or `gestures.group_icon.double_tap` instead |
+
+### Example: Hue scenes on a room-light double-tap
+
+```yaml
+type: custom:everyday-light-card
+entity: light.wohnzimmer
+gestures:
+  group_icon:
+    double_tap: scenes_list
+# Optional override — without this, every scene that targets a wohnzimmer
+# leaf light is auto-discovered.
+scenes_picker:
+  scenes:
+    - scene.wohnzimmer_konzentriert
+    - scene.wohnzimmer_entspannen
+    - scene.wohnzimmer_lesen
+  transition: 0.4
+```
+
+---
+
 ## `cycle`
 
 Override the double-tap cycle order.
@@ -189,6 +222,7 @@ Per-icon gesture mapping. Each icon (member, group) can map `tap`, `long_press`,
 - `color_wheel` - opens the color wheel
 - `cycle_mode` - cycles slider mode (see [`cycle`](#cycle))
 - `effects_list` - opens the effects-list picker
+- `scenes_list` - opens the scenes-list picker. Lists every `scene.*` entity whose `entity_id` attribute intersects this light's leaves. Tap a scene → `scene.turn_on`. Override the auto-discovery via [`scenes_picker.scenes`](#scenes_picker).
 
 ### Example
 

@@ -30,7 +30,16 @@ export type GestureAction =
   | 'classic_more_info'
   | 'color_wheel'
   | 'cycle_mode'
-  | 'effects_list';
+  | 'effects_list'
+  // Stefan-2026-05-16 PA-0001 (scenes_list): open a list-picker of scenes
+  // that target this light entity. Mirrors `effects_list`. Scene discovery
+  // intersects every `scene.*` entity's `entity_id` attribute with the
+  // target light's children (when the light is itself a group) or with
+  // `[entity]` (when leaf). Tap-to-fire calls `scene.turn_on`. Designed
+  // for Hue users who favourite scenes in the Hue app and want those
+  // scenes one-tap reachable from this card. Config knob:
+  // `scenes_picker.scenes` for an explicit override list.
+  | 'scenes_list';
 
 export interface GestureMapping {
   tap?: GestureAction;
@@ -207,6 +216,47 @@ export interface SavedColorsConfig {
  */
 export interface EffectsPickerConfig {
   source?: `helper:${string}`;
+  editable?: boolean;
+  in_picker?: boolean;
+}
+
+/**
+ * Scenes-list-picker config (Stefan-2026-05-16 PA-0001, edit-mode wired
+ * in PA-0005).
+ *
+ * Mirrors `EffectsPickerConfig` shape, targets the `scene.*` domain.
+ * Hue users favourite scenes in the Hue app — those scenes appear as
+ * `scene.<name>` entities in HA. The card auto-discovers relevant
+ * scenes via two paths (unioned): entity_id-attribute intersection
+ * (HA-native + light_group scenes), and Hue `group_name` match (Hue-
+ * bridge scenes which don't populate `entity_id`).
+ *
+ * Config knobs:
+ *   `scenes` — explicit list of `scene.*` entity ids. When set, replaces
+ *     auto-discovery entirely. Use when auto-discovery surfaces unwanted
+ *     scenes (e.g. global "all lights" scenes that touch every bulb)
+ *     or when the user wants a curated short-list per card.
+ *   `source` — `helper:input_text.<id>` for persistence of the curated
+ *     active-order across reloads. JSON payload
+ *     `{ activeOrder: [sceneId, ...] }`. Without a source, edits live
+ *     in-memory and are lost on refresh.
+ *   `transition` — seconds passed to `scene.turn_on`. Default 0.4 to
+ *     roughly match the Hue-app feel.
+ *   `name_strip_prefix` — when true (default), strip the light's
+ *     friendly_name prefix from scene names so "Wohnzimmer Konzentriert"
+ *     renders as "Konzentriert". Set false to keep the full name.
+ *   `editable` — long-press an active scene-row to enter edit mode
+ *     (hide / restore scenes from the discovered list). Default true.
+ *     Mirrors `effects_picker.editable`. Set false for a strict pick-
+ *     only surface (e.g. a guest tablet).
+ *   `in_picker` — reserved for the future mode-picker slot. Not wired
+ *     yet; trigger the action via `gestures.*.double_tap: scenes_list`.
+ */
+export interface ScenesPickerConfig {
+  scenes?: string[];
+  source?: `helper:${string}`;
+  transition?: number;
+  name_strip_prefix?: boolean;
   editable?: boolean;
   in_picker?: boolean;
 }
@@ -391,6 +441,14 @@ export interface EverydayLightCardConfig extends LovelaceCardConfig {
   // user's curated active-order across reloads. Without it, curation is
   // in-memory only.
   effects_picker?: EffectsPickerConfig;
+
+  // Scenes-list-picker (Stefan-2026-05-16 PA-0001). Drives the
+  // `scenes_list` gesture action — opens a popup with Hue/HA scenes that
+  // target this light. Without `scenes_picker` the card auto-discovers
+  // scenes by intersecting `scene.*` entity_id attributes with the
+  // target light's children. Provide `scenes_picker.scenes` to override
+  // with an explicit list.
+  scenes_picker?: ScenesPickerConfig;
 
   // Optional R-v5-4: Stefan-Decision 2026-05-07 - mode 'classic' triggers HA-native more-info dialog
   // for users who prefer the standard HA light card UI in a popup.

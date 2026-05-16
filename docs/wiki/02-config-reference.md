@@ -95,8 +95,8 @@ gestures:
   long_press_ms: 200
   member_icon:
     tap: toggle_with_restore | toggle | classic_more_info | none
-    long_press: mode_picker | color_wheel | saved_colors | effects_list | expand_inline | expand_overlay | classic_more_info | none
-    double_tap: color_wheel | saved_colors | effects_list | classic_more_info | toggle | toggle_with_restore | cycle_mode | none
+    long_press: mode_picker | color_wheel | saved_colors | effects_list | scenes_list | expand_inline | expand_overlay | classic_more_info | none
+    double_tap: color_wheel | saved_colors | effects_list | scenes_list | classic_more_info | toggle | toggle_with_restore | cycle_mode | none
   group_icon: { tap, long_press, double_tap }   # same shape as member_icon
 ```
 

@@ -1,6 +1,6 @@
 {
   "name": "everyday-light-card",
-  "version": "1.0.8",
+  "version": "1.0.12",
   "description": "Group-aware Lovelace light card with mindmap-path topology, in-place mode picker, saved-colors edit mode, and runtime-rotatable gestures. Brand: everyday by f17mkx.",
   "main": "dist/everyday-light-card.js",
   "type": "module",
@@ -10,10 +10,12 @@
     "lint": "eslint 'src/**/*.ts'",
     "lint:css-comments": "node scripts/check-css-comments.js",
     "prebuild": "npm run lint:css-comments",
+    "postbuild": "bash scripts/deploy-to-hassio.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "release:sync": "bash scripts/sync-to-public.sh"
+    "release:sync": "bash scripts/sync-to-public.sh",
+    "deploy": "bash scripts/deploy-to-hassio.sh"
   },
   "keywords": [
     "home-assistant",

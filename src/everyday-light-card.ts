@@ -17,10 +17,13 @@ import './components/vertical-pill-slider.js';
 import './components/mindmap-path.js';
 import './components/group-layout-expanded.js';
 import './components/effects-list-picker.js';
+import './components/scenes-list-picker.js';
 import './components/color-wheel.js';
 import './components/saved-colors-picker.js';
 import './components/mode-picker.js';
 import { resolveGroup } from './helpers/group-detection.js';
+import { discoverScenesForEntity } from './helpers/scenes-discovery.js';
+import { resolveOverflow } from './helpers/member-cols-gap.js';
 import { PickerController } from './helpers/picker-controller.js';
 import { POPUP_PORTAL_STYLES } from './helpers/popup-portal-styles.js';
 import { computeIconStateColor, computeIconBorderColor } from './helpers/icon-color.js';
@@ -49,7 +52,7 @@ const DEFAULT_PARALLEL_SAVED_COLORS: ColorTuple[] = [
   [200, 100, 220],  // purple
 ];
 
-const VERSION = '1.0.8';
+const VERSION = '1.0.12';
 
 console.info(
   `%c EVERYDAY-LIGHT-CARD %c v${VERSION} `,
@@ -114,6 +117,29 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
   @state() private _effectsPopupOpen = false;
   private _effectsPopupOpenedAt = 0;
 
+  // Stefan-2026-05-16 PA-0001 (scenes_list): scenes-list popup, parallel
+  // shape to `_effectsPopupOpen`. Triggered by the `scenes_list` gesture
+  // action (configured per-entity on member or group icons). When open,
+  // renders the scenes-list-picker in the body-portal anchored at viewport
+  // center. Backdrop tap dismisses (suppressed 300 ms post-open to absorb
+  // the phantom click that fires after the gesture's pointerup).
+  @state() private _scenesPopupOpen = false;
+  private _scenesPopupOpenedAt = 0;
+
+  /**
+   * Stefan-2026-05-16 PA-0005: scenes-picker edit-mode + activeOrder state.
+   * Mirror of `_effectsActiveOrder` / `_effectsEditMode`. The user's
+   * preferred order of active scene ids (subset of the discovered list);
+   * scenes in discovery but NOT in activeOrder render in the grayed-out
+   * section while edit-mode is on. Persistence via
+   * `scenes_picker.source: helper:input_text.<id>` (JSON payload
+   * `{ activeOrder: [string, ...] }`). Without a source, in-memory only.
+   * Default editable=true so long-press → enter-edit works out of the box.
+   */
+  @state() private _scenesActiveOrder: string[] = [];
+  @state() private _scenesEditMode = false;
+  private _scenesLastHelperRaw?: string;
+
   // Stefan-2026-05-09 P14c: picker + wheel + saved-colors popup
   // machinery extracted to a Lit Reactive Controller. Same controller
   // can be used by group-layout-expanded.ts in P14c.2 to dedupe the
@@ -146,6 +172,29 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
    * set so the user can toggle on-the-fly without editing YAML.
    */
   @state() private _parallelInlineCompactRuntime: boolean | undefined = undefined;
+
+  /**
+   * Stefan-2026-05-16 PA-0003: dynamic gap + slider-width override for the
+   * parallel-inline row. Mirrors `_computedMemberColsGap` /
+   * `_computedSliderWidthOverride` in group-layout-expanded.ts. A
+   * ResizeObserver on `.parallel-slider-row` re-runs `resolveOverflow`
+   * (the same helper compact-group uses) and writes the result inline on
+   * the row so:
+   *   - sliders never overlap (priority 1 from PA-0044),
+   *   - gap shrinks first (priority 2), slider-width second,
+   *   - the entire parallel card adapts to its container width like the
+   *     compact group does — Stefan-Quote PA-0003: "Die breite der
+   *     Paralell sliders und das Gap management soll nach dem gleichen
+   *     Schema funktionieren wie zb bei config3.txt für die Light slider".
+   * `undefined` = no override applied yet (initial paint before RO
+   * measures), CSS fallback (`var(--member-cols-gap, 14px)`,
+   * `var(--everyday-slider-width, 60px)`) kicks in.
+   */
+  @state() private _parallelGapPx: number | undefined = undefined;
+  @state() private _parallelSliderWidthOverride: number | undefined = undefined;
+  private _parallelRowObserver: ResizeObserver | null = null;
+  private _observedParallelRowEl: HTMLElement | null = null;
+  private _parallelRowRecomputeRaf = 0;
 
   private _picker = new PickerController(this, {
     // Stefan-2026-05-10 P15.6-r46 (R221 + R222): variant `parallel-inline`
@@ -300,6 +349,17 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       // re-config to a different action).
       this._effectsPopupOpen = true;
       this._effectsPopupOpenedAt = Date.now();
+      return;
+    }
+    if (action === 'scenes_list') {
+      // Stefan-2026-05-16 PA-0001 (scenes_list): mirrors effects_list path
+      // — open a body-portal popup listing every `scene.*` whose
+      // entity_id intersects the target light's leaves (or the explicit
+      // `scenes_picker.scenes` override). Render-method silently no-ops
+      // when discovery returns empty so misconfigured cards just see
+      // nothing happen instead of an empty surface.
+      this._scenesPopupOpen = true;
+      this._scenesPopupOpenedAt = Date.now();
       return;
     }
     if (action === 'classic_more_info') {
@@ -666,12 +726,114 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
       this._pickerPortal.remove();
       this._pickerPortal = null;
     }
+    // Stefan-2026-05-16 PA-0003: detach the parallel-row ResizeObserver
+    // on disconnect to avoid leaks across HA view-switches.
+    if (this._parallelRowObserver) {
+      this._parallelRowObserver.disconnect();
+      this._parallelRowObserver = null;
+    }
+    this._observedParallelRowEl = null;
+    if (this._parallelRowRecomputeRaf) {
+      cancelAnimationFrame(this._parallelRowRecomputeRaf);
+      this._parallelRowRecomputeRaf = 0;
+    }
+  }
+
+  /**
+   * Stefan-2026-05-16 PA-0003: bind/unbind the parallel-slider-row's
+   * ResizeObserver. Called from `updated()`. Idempotent — re-binds only
+   * when the observed element identity changes (Lit may have replaced
+   * the row across renders).
+   */
+  private _ensureParallelRowObserver(rowEl: HTMLElement | null): void {
+    if (rowEl === this._observedParallelRowEl) return;
+    if (this._parallelRowObserver) {
+      this._parallelRowObserver.disconnect();
+    }
+    this._observedParallelRowEl = rowEl;
+    if (!rowEl) {
+      // Row no longer rendered (user flipped default_view_mode away from
+      // parallel). Clear cached overrides so a future re-render starts
+      // from the CSS fallback.
+      this._parallelGapPx = undefined;
+      this._parallelSliderWidthOverride = undefined;
+      return;
+    }
+    this._parallelRowObserver = new ResizeObserver(() => this._scheduleParallelRowRecompute());
+    this._parallelRowObserver.observe(rowEl);
+    // Trigger an initial measure so we don't wait for the first user-resize.
+    this._scheduleParallelRowRecompute();
+  }
+
+  /**
+   * Stefan-2026-05-16 PA-0003: rAF-coalesced recompute of the parallel
+   * row's gap + slider-width override. Mirrors the compact-group's
+   * `_scheduleGapRecompute` in group-layout-expanded.ts:1367 but operates
+   * on `.parallel-slider-row` instead of `.member-cols`. Same
+   * `resolveOverflow` helper so the visual rhythm matches between a
+   * parallel-axis card and a compact-expanded group sitting next to it.
+   *
+   * 0.5 px dedup on both outputs prevents RO ↔ render feedback loops.
+   */
+  /**
+   * Stefan-2026-05-16 PA-0003: build the inline style for the
+   * `.parallel-slider-row` that carries the dynamic gap + cascaded
+   * slider-width override. Read by the two render branches. Explicit
+   * `slider.width` config still wins for the slider width via
+   * `effectiveSliderWidth` cascading — we only OVERRIDE the cascade when
+   * resolveOverflow says we must shrink to fit. Gap honours
+   * `--member-cols-gap` so the visual rhythm matches compact-group cards.
+   */
+  private _parallelRowInlineStyle(): string {
+    const parts: string[] = [];
+    if (this._parallelGapPx !== undefined) {
+      parts.push(`--member-cols-gap: ${this._parallelGapPx}px`);
+      parts.push(`gap: ${this._parallelGapPx}px`);
+    }
+    if (this._parallelSliderWidthOverride !== undefined && !this.config?.slider?.width) {
+      parts.push(`--everyday-slider-width: ${this._parallelSliderWidthOverride}px`);
+    }
+    return parts.join('; ');
+  }
+
+  private _scheduleParallelRowRecompute(): void {
+    if (this._parallelRowRecomputeRaf) return;
+    this._parallelRowRecomputeRaf = requestAnimationFrame(() => {
+      this._parallelRowRecomputeRaf = 0;
+      const el = this._observedParallelRowEl;
+      if (!el) return;
+      const containerWidth = el.clientWidth;
+      const childCount = el.children.length;
+      // Read the cascaded baseline (60 default) — never the local override,
+      // so the algorithm re-derives from scratch each frame and can
+      // naturally relax when the container grows back.
+      const baselineCss = getComputedStyle(this).getPropertyValue('--everyday-slider-width').trim();
+      const baselineSliderWidth = parseFloat(baselineCss) || 60;
+      const resolved = resolveOverflow({
+        depth: this.depth,
+        containerWidth,
+        childCount,
+        baselineSliderWidth,
+      });
+      const prevGap = this._parallelGapPx;
+      const prevOverride = this._parallelSliderWidthOverride;
+      const gapChanged = prevGap === undefined
+        || Math.abs(prevGap - resolved.gap) >= 0.5;
+      const overrideChanged = (prevOverride ?? -1) !== (resolved.sliderOverride ?? -1)
+        && (prevOverride === undefined
+          || resolved.sliderOverride === undefined
+          || Math.abs((prevOverride ?? 0) - (resolved.sliderOverride ?? 0)) >= 0.5);
+      if (gapChanged) this._parallelGapPx = resolved.gap;
+      if (overrideChanged) this._parallelSliderWidthOverride = resolved.sliderOverride;
+      if (gapChanged || overrideChanged) this.requestUpdate();
+    });
   }
 
   protected updated(): void {
     // Sync from helper-source on every hass push so external mutations
     // are reflected. No-op when no source is configured.
     this._syncEffectsActiveFromSource();
+    this._syncScenesActiveFromSource();
     // Stefan-2026-05-09 P14c: re-bind picker gestures on every render.
     // Controller is idempotent (tears down old binding before re-binding).
     // Stefan-2026-05-11 R289 (PA-14): bind `.single-icon` when configured.
@@ -694,6 +856,11 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
     // double-query is cheap.
     const parallelCompactIcon = this.renderRoot.querySelector('.parallel-compact-icon') as HTMLElement | null;
     this._picker.bindIcon(parallelIcon ?? parallelCompactIcon ?? singleIcon);
+    // Stefan-2026-05-16 PA-0003: bind the ResizeObserver to the parallel
+    // slider-row so its width + slider-count drive `resolveOverflow`. Null
+    // when the card isn't in parallel mode — observer detaches cleanly.
+    const parallelRow = this.renderRoot.querySelector('.parallel-slider-row') as HTMLElement | null;
+    this._ensureParallelRowObserver(parallelRow);
     // Stefan-2026-05-10 R148: render the picker's wheel + saved popups
     // into the body-portal so they escape HA's transform-ancestor (which
     // would otherwise break position:fixed). The PickerController's
@@ -701,7 +868,7 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
     // empty render call cleans the portal naturally.
     if (this._pickerPortal) {
       render(
-        html`${this._picker.renderWheel()}${this._picker.renderSaved()}${this._renderEffectsPopup()}`,
+        html`${this._picker.renderWheel()}${this._picker.renderSaved()}${this._renderEffectsPopup()}${this._renderScenesPopup()}`,
         this._pickerPortal,
       );
     }
@@ -756,6 +923,193 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
    * grid-template recomputes). Reset to undefined on disconnect.
    */
   private _lastEmittedVisibleLeafCount?: number;
+
+  // ============================================================
+  // Scenes-picker handlers (Stefan-2026-05-16 PA-0001)
+  // ============================================================
+  /**
+   * Tap a scene row → fire `scene.turn_on` against the picked scene id.
+   * Optional `transition` honors `scenes_picker.transition` config (seconds).
+   * Default 0.4 s loosely matches the Hue-app fade feel.
+   */
+  private _onScenePick = (ev: CustomEvent): void => {
+    ev.stopPropagation();
+    if (!this.hass || !this.config) return;
+    const id = ev.detail?.id as string | undefined;
+    if (!id) return;
+    const transition = this.config.scenes_picker?.transition ?? 0.4;
+    void this.hass.callService('scene', 'turn_on', {
+      entity_id: id,
+      transition,
+    });
+  };
+
+  /**
+   * Stefan-2026-05-16 PA-0005: scenes edit-mode handlers. Mirror of the
+   * effects-picker edit handlers. Long-press a row → enter-edit;
+   * long-press in edit → delete (move to grayed); tap a grayed row →
+   * restore. Persistence via `scenes_picker.source` helper input_text.
+   */
+  private _onSceneDelete = (ev: CustomEvent): void => {
+    ev.stopPropagation();
+    const id = ev.detail?.id as string | undefined;
+    if (!id || !this.hass || !this.config) return;
+    const fullIds = discoverScenesForEntity(this.hass, this.config.entity, {
+      override: this.config.scenes_picker?.scenes,
+      stripPrefix: this.config.scenes_picker?.name_strip_prefix !== false,
+    }).map((s) => s.id);
+    const current = this._scenesActiveOrder.length > 0 ? this._scenesActiveOrder : fullIds;
+    this._scenesActiveOrder = current.filter((s) => s !== id);
+    this._persistScenesActiveToSource();
+  };
+
+  private _onSceneRestore = (ev: CustomEvent): void => {
+    ev.stopPropagation();
+    const id = ev.detail?.id as string | undefined;
+    if (!id || !this.hass || !this.config) return;
+    const fullIds = discoverScenesForEntity(this.hass, this.config.entity, {
+      override: this.config.scenes_picker?.scenes,
+      stripPrefix: this.config.scenes_picker?.name_strip_prefix !== false,
+    }).map((s) => s.id);
+    const current = this._scenesActiveOrder.length > 0 ? this._scenesActiveOrder : fullIds;
+    if (current.includes(id)) return;
+    this._scenesActiveOrder = [...current, id];
+    this._persistScenesActiveToSource();
+  };
+
+  private _onScenesEnterEdit = (ev: CustomEvent): void => {
+    ev.stopPropagation();
+    this._scenesEditMode = true;
+  };
+
+  private _onScenesExitEdit = (ev?: CustomEvent): void => {
+    ev?.stopPropagation();
+    this._scenesEditMode = false;
+  };
+
+  /**
+   * Stefan-2026-05-16 PA-0005: read scenes activeOrder from
+   * `scenes_picker.source: helper:input_text.<id>` on every hass push.
+   * JSON payload `{ activeOrder: [sceneId, ...] }`. Mirrors
+   * `_syncEffectsActiveFromSource`.
+   */
+  private _syncScenesActiveFromSource(): void {
+    const cfg = this.config?.scenes_picker;
+    if (!cfg?.source) return;
+    if (typeof cfg.source !== 'string' || !cfg.source.startsWith('helper:')) return;
+    const helperId = cfg.source.substring('helper:'.length);
+    const raw = this.hass?.states[helperId]?.state;
+    if (!raw || raw === 'unknown' || raw === 'unavailable') return;
+    if (raw === this._scenesLastHelperRaw) return;
+    this._scenesLastHelperRaw = raw;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (typeof parsed !== 'object' || parsed === null) return;
+      const candidate = (parsed as { activeOrder?: unknown }).activeOrder;
+      if (!Array.isArray(candidate)) return;
+      const valid = candidate.filter((e): e is string => typeof e === 'string');
+      this._scenesActiveOrder = valid;
+    } catch {
+      // Invalid JSON - silent ignore (fix via Settings).
+    }
+  }
+
+  private _persistScenesActiveToSource(): void {
+    const cfg = this.config?.scenes_picker;
+    if (!cfg?.source) return;
+    if (typeof cfg.source !== 'string' || !cfg.source.startsWith('helper:')) return;
+    const helperId = cfg.source.substring('helper:'.length);
+    const value = JSON.stringify({ activeOrder: this._scenesActiveOrder });
+    const helper = this.hass?.states[helperId];
+    const helperMax = (helper?.attributes?.max as number | undefined) ?? 100;
+    if (value.length > helperMax) {
+      console.warn(
+        `[everyday-light-card] scenes activeOrder (${value.length} chars) exceeds ${helperId} max (${helperMax}). Bump the helper max.`,
+      );
+      return;
+    }
+    this._scenesLastHelperRaw = value;
+    void this.hass?.callService('input_text', 'set_value', {
+      entity_id: helperId,
+      value,
+    });
+  }
+
+  /**
+   * Stefan-2026-05-16 PA-0001 (scenes_list): render the scenes-list-picker
+   * popup when triggered via the `scenes_list` gesture action. Returns null
+   * when closed or when discovery returns no matching scenes. Backdrop tap
+   * closes; scene-pick fires the handler then auto-closes. 300 ms phantom-
+   * click suppression mirrors the effects popup. Mirrors `_renderEffectsPopup`
+   * intentionally — the visual + interaction surface should feel identical.
+   */
+  private _renderScenesPopup(): TemplateResult | null {
+    if (!this._scenesPopupOpen || !this.hass || !this.config) return null;
+    const scenes = discoverScenesForEntity(this.hass, this.config.entity, {
+      override: this.config.scenes_picker?.scenes,
+      stripPrefix: this.config.scenes_picker?.name_strip_prefix !== false,
+    });
+    if (scenes.length === 0) {
+      // Nothing to show — silently no-op so a misconfigured card just sees
+      // no popup instead of an empty surface. User can re-config to a
+      // different action or add `scenes_picker.scenes` explicit list.
+      this._scenesPopupOpen = false;
+      return null;
+    }
+    const close = (): void => {
+      this._scenesPopupOpen = false;
+      // Stefan-2026-05-16 PA-0005: reset edit-mode on close so the next
+      // open starts in default pick-mode. Long-press → enter-edit gets
+      // the user back into edit mode if they want.
+      this._scenesEditMode = false;
+      this.requestUpdate();
+    };
+    const onBackdropTap = (ev: Event): void => {
+      ev.stopPropagation();
+      if (Date.now() - this._scenesPopupOpenedAt < 300) return;
+      close();
+    };
+    return html`
+      <div
+        class="scenes-popup-backdrop"
+        style="position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 199; pointer-events: auto;"
+        @click=${onBackdropTap}
+      >
+        <div
+          class="inplace-popup scenes"
+          style="left: 50%; top: 50%; width: min(360px, 90vw); max-height: min(70vh, 540px); padding: 18px; overflow: auto;"
+          @click=${(ev: Event) => ev.stopPropagation()}
+        >
+          <div style="display:flex; justify-content:space-between; align-items:center; width:100%; margin-bottom: 12px;">
+            <div style="font-size: 14px; font-weight: 500; color: var(--primary-text-color, #fff);">Scenes</div>
+            <button
+              class="popup-close"
+              style="width:28px; height:28px; border-radius:50%; border:none; background:rgba(255,255,255,0.08); color:var(--primary-text-color,#fff); font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center;"
+              @click=${close}
+            >×</button>
+          </div>
+          <everyday-scenes-list-picker
+            .scenes=${scenes}
+            .activeOrder=${this._scenesActiveOrder}
+            .editMode=${this._scenesEditMode}
+            .editable=${this.config.scenes_picker?.editable !== false}
+            .longPressMs=${200}
+            @scene-pick=${(ev: CustomEvent) => {
+              this._onScenePick(ev);
+              // Stefan-2026-05-16 PA-0005: keep the popup open while in
+              // edit-mode so users can keep curating; close on pick in
+              // default mode (one-shot scene-trigger UX).
+              if (!this._scenesEditMode) close();
+            }}
+            @delete-scene=${this._onSceneDelete}
+            @restore-scene=${this._onSceneRestore}
+            @enter-edit=${this._onScenesEnterEdit}
+            @exit-edit=${this._onScenesExitEdit}
+          ></everyday-scenes-list-picker>
+        </div>
+      </div>
+    `;
+  }
 
   /**
    * Stefan-2026-05-10 P15.6-r28: render the effects-list-picker popup when
@@ -886,6 +1240,7 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
         .mindmapDots=${typeof groupCfg.mindmap_dots === 'boolean' ? groupCfg.mindmap_dots : false}
         .savedColorsConfig=${cfg.saved_colors}
         .parallelSlidersConfig=${cfg.parallel_sliders}
+        .scenesPickerConfig=${cfg.scenes_picker}
         .fullLengthSliders=${groupCfg.full_length_sliders === true}
         .expansionMode=${groupCfg.expansion_mode ?? 'inline'}
         .expandInPlace=${groupCfg.expand_in_place === true}
@@ -1232,7 +1587,7 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
                  the new icon position via bottom-anchored CSS (see styles
                  below). caption stays last. -->
             <div class="parallel-compact-layout">
-              <div class="parallel-slider-row">
+              <div class="parallel-slider-row" style=${this._parallelRowInlineStyle()}>
                 ${modes.map(
                   (m) => html`
                     <div class="parallel-inline-col">
@@ -1263,7 +1618,7 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
           `
         : html`
             <div class="parallel-mindmap-layout">
-              <div class="parallel-slider-row">
+              <div class="parallel-slider-row" style=${this._parallelRowInlineStyle()}>
                 ${modes.map(
                   (m) => html`
                     <div class="parallel-inline-col">
@@ -1292,8 +1647,8 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
                   .memberYOverride=${10}
                   .groupOn=${isOn}
                   .groupRgb=${rgb}
-                  .tileGap=${14}
-                  .sliderWidth=${cfg.slider?.width ?? 60}
+                  .tileGap=${this._parallelGapPx ?? 14}
+                  .sliderWidth=${cfg.slider?.width ?? this._parallelSliderWidthOverride ?? 60}
                 ></everyday-mindmap-path>
                 <ha-state-icon
                   class="parallel-mindmap-icon ${isOn ? 'active' : ''}"
@@ -1386,6 +1741,7 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
           .mindmapDots=${mindmapDots}
           .savedColorsConfig=${cfg.saved_colors}
           .parallelSlidersConfig=${cfg.parallel_sliders}
+          .scenesPickerConfig=${cfg.scenes_picker}
           .fullLengthSliders=${groupCfg.full_length_sliders === true}
           .expansionMode=${groupCfg.expansion_mode ?? 'inline'}
           .expandInPlace=${groupCfg.expand_in_place === true}
@@ -1895,28 +2251,34 @@ export class EverydayLightCard extends LitElement implements LovelaceCard {
     .parallel-slider-row {
       display: flex;
       flex-direction: row;
-      /* Stefan-2026-05-12 R350 (PA-0019): minimum gap so sliders don't
-         visually butt against each other in narrow containers. Stefan-
-         Quote PA-0019: "when expanded and when there is enough space the
-         paralell sliders are 0px apart (no gap between them)". With
-         gap=14, even a tight container shows clear separation. space-
-         around adds additional spacing on top of the gap when there's
-         slack — so wider containers naturally distribute more space
-         between sliders while still respecting the floor. Mindmap-arms
-         still anchor at slider-centers via space-around's distribution
-         (the item's center stays the same; only the BETWEEN-spacing
-         changes by +14 px which is small enough that arm-misalignment
-         is not visually noticeable). */
-      gap: 14px;
-      /* Stefan-2026-05-09 P12 R103: space-around distributes the sliders
-         exactly where mindmap-path's simple (i+0.5)/N * W formula puts
-         the memberX positions, so the arms hit slider-centers without
-         a gap-aware adjustment dance. */
-      justify-content: space-around;
+      /* Stefan-2026-05-16 PA-0003: gap reads the dynamic --member-cols-gap
+         set inline by _scheduleParallelRowRecompute, with a 14 px fallback
+         for the initial paint (before the ResizeObserver has measured the
+         row). Same variable name used by the compact-group .member-cols,
+         so a future cross-card visual coordination pass can read a
+         single source-of-truth. (R111-safe: no backticks.) */
+      gap: var(--member-cols-gap, 14px);
+      /* Stefan-2026-05-16 PA-0003: space-between instead of pre-R350
+         space-around because cols now have flex: 1 1 0 (below) — they
+         already distribute the available width themselves, and
+         space-around would push the first/last cols inward away from the
+         row edge which mis-anchors the mindmap arms (groupX assumes
+         (i+0.5)/N * W which expects EDGE-aligned distribution, not
+         margin-padded). With flex:1 1 0 cols at equal width + gap-based
+         spacing between them, the slider centers land at exactly
+         (i+0.5)/N * W. */
+      justify-content: space-between;
       align-items: flex-end;
       width: 100%;
     }
+    /* Stefan-2026-05-16 PA-0003: cols grow to fill row width equally.
+       flex: 1 1 0 lets the row width drive col width (and therefore the
+       slider --everyday-slider-width via inline style on the row).
+       min-width:0 prevents the slider intrinsic min-content from pinning
+       the col wider than its fair share when the row is narrow. */
     .parallel-slider-row .parallel-inline-col {
+      flex: 1 1 0;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       align-items: center;

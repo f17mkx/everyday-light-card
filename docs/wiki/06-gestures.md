@@ -40,6 +40,7 @@ gestures:
 | `color_wheel` | Open color-wheel popup directly (skip picker). |
 | `saved_colors` | Open saved-colors popup directly. |
 | `effects_list` | Open effects-list-picker as modal (parallel-inline only). |
+| `scenes_list` | Open scenes-list-picker as modal. Lists every `scene.*` whose `entity_id` intersects the target light's leaves. Tap to fire `scene.turn_on`. Tuned for Hue users who favourite scenes in the Hue app — those scenes appear as `scene.*` entities and become one-tap reachable. Configure via `scenes_picker.scenes` to override auto-discovery, `scenes_picker.transition` for fade seconds. |
 | `expand_inline` | Compact group → in-place expand to N-slider topology. |
 | `expand_overlay` | Compact group → body-portal popup with topology. |
 | `classic_more_info` | HA's stock more-info dialog. |
@@ -68,6 +69,7 @@ Some action / context combinations are no-ops:
 - `cycle_mode` on parallel-inline → no-op (every mode is already visible side-by-side, nothing to cycle).
 - `expand_*` on parallel-inline → no-op (would require leaving parallel-mode entirely).
 - `effects_list` on a light without `attributes.effect_list` → silently no-op (popup self-closes).
+- `scenes_list` on a light with zero matching scenes → silently no-op (popup self-closes). Either no `scene.*` entity intersects the light's leaves OR the explicit `scenes_picker.scenes` override resolved to nothing.
 
 These no-ops are intentional and silent. The card stays usable; it just doesn't do the misconfigured thing.
 
